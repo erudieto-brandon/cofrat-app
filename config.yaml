@@ -1,0 +1,10 @@
+credentials:
+  usernames:
+    jsmith:
+      email: jsmith@gmail.com
+      name: John Smith
+      password: '$2b$12$E9/VSm92ZHg3a1aX2f.2d.u523u2u.iP2.iP2.iP2.iP2.iP2' # Hash para senha123
+    rbriggs:
+      email: rbriggs@gmail.com
+      name: Rebecca Briggs
+      password: '$2b$12$L5/Qf.Qf.Qf.Qf.Qf.Qf.Qf.Qf.Qf.Qf.Qf.Qf.Qf.Qf.Qf' # Hash para abc@123
