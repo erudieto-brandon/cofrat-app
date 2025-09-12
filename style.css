@@ -1,0 +1,45 @@
+/* Estilo para os containers de métricas (os cards) */
+div[data-testid="metric-container"] {
+    background-color: #FFFFFF;
+    border: 1px solid #E0E0E0;
+    border-radius: 10px;
+    padding: 15px;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+    transition: box-shadow 0.3s ease-in-out;
+}
+
+div[data-testid="metric-container"]:hover {
+    box-shadow: 0 8px 16px rgba(0,0,0,0.2);
+}
+
+/* Estilo geral para botões */
+.stButton>button {
+    width: 100%;
+    border-radius: 5px;
+}
+
+/* Estilo para o título customizado da página inicial */
+.custom-title-container {
+    display: flex;
+    align-items: center;
+}
+
+.custom-title-bar {
+    width: 0px;
+    height: 0px;
+    background-color: #000000;
+    margin-right: 0px;
+}
+
+.custom-title h1 {
+    color: #000000;
+    margin-bottom: 0px;
+    font-size: 30px;
+    font-weight: bold;
+}
+
+.custom-title p {
+    color: #5a5a5a;
+    margin-top: 0px;
+    font-size: 17px;
+}
