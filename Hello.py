@@ -15,6 +15,8 @@
 import streamlit as st
 from streamlit.logger import get_logger
 
+st.title("Meu pastel é mais barato que o seu")
+
 LOGGER = get_logger(__name__)
 
 def run():
