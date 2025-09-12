@@ -1,4 +1,4 @@
-/* Estilo para os containers de métricas (os cards) */
+/* === ESTILOS GERAIS E DO DASHBOARD === */
 div[data-testid="metric-container"] {
     background-color: #FFFFFF;
     border: 1px solid #E0E0E0;
@@ -7,39 +7,111 @@ div[data-testid="metric-container"] {
     box-shadow: 0 4px 8px rgba(0,0,0,0.1);
     transition: box-shadow 0.3s ease-in-out;
 }
-
 div[data-testid="metric-container"]:hover {
     box-shadow: 0 8px 16px rgba(0,0,0,0.2);
 }
-
-/* Estilo geral para botões */
 .stButton>button {
     width: 100%;
     border-radius: 5px;
 }
-
-/* Estilo para o título customizado da página inicial */
 .custom-title-container {
     display: flex;
     align-items: center;
 }
-
 .custom-title-bar {
     width: 0px;
     height: 0px;
     background-color: #000000;
     margin-right: 0px;
 }
-
 .custom-title h1 {
     color: #000000;
     margin-bottom: 0px;
     font-size: 30px;
     font-weight: bold;
 }
-
 .custom-title p {
     color: #5a5a5a;
     margin-top: 0px;
     font-size: 17px;
+}
+
+/* === ESTILOS PARA O FORMULÁRIO DE LOGIN === */
+
+/* Placeholder para o logo acima do formulário */
+.login-logo-placeholder {
+    height: 60px; /* Defina a altura do espaço para o seu logo */
+    margin-bottom: 20px;
+}
+
+/* Container principal do formulário (o card branco) */
+.login-container {
+    background-color: #ffffff;
+    padding: 35px;
+    border-radius: 10px;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+    border: 1px solid #e0e0e0;
+}
+
+/* Cabeçalho dentro do formulário (ícone + textos) */
+.login-header {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    margin-bottom: 25px;
+}
+
+/* Ícone de cadeado no cabeçalho */
+.login-header .bi-lock {
+    font-size: 20px;
+    /* Altere a cor do ícone principal aqui */
+    color: #0b9035;
+}
+
+/* VERSÃO CORRIGIDA */
+/* Título principal do formulário (ex: "Fazer Login") */
+h2.login-title {
+    font-weight: bold;
+    /* Altere o tamanho da fonte do título aqui */
+    font-size: 22px;
+    margin: 0;
+}
+/* Subtítulo do formulário */
+.login-subtitle {
+    font-size: 14px;
+    /* Altere a cor do subtítulo aqui */
+    color: #5a5a5a;
+    margin: -20px;
+}
+
+/* Label customizado para os campos de input (Email, Senha) */
+.input-label {
+    font-size: 14px;
+    font-weight: 500;
+    color: #333740;
+    margin-bottom: -10px;
+}
+
+/* Espaçamento entre os campos de input */
+div[data-testid="stTextInput"] {
+    margin-bottom: 15px;
+}
+
+/* Botão de Entrar dentro do container de login */
+.login-container .stButton>button {
+    /* Altere a cor de fundo do botão aqui */
+    background-color: #212529; /* Preto opaco / Cor carvão */
+    /* Altere a cor do texto do botão aqui */
+    color: white;
+    border: none;
+    padding: 12px 0;
+    font-size: 16px;
+    font-weight: bold;
+    margin-top: 15px;
+}
+
+/* Efeito hover para o botão de Entrar */
+.login-container .stButton>button:hover {
+    background-color: #4b505a;
+    color: white;
 }

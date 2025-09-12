@@ -13,10 +13,10 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# --- FUNÇÃO PARA CARREGAR CSS EXTERNO ---
+# VERSÃO CORRIGIDA
 def load_css(file_name):
     """Carrega um arquivo CSS externo para dentro do app Streamlit."""
-    with open(file_name) as f:
+    with open(file_name, encoding="utf-8") as f:
         st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
 
 # Carrega o nosso arquivo de estilos

@@ -1,16 +1,56 @@
 import streamlit as st
 import streamlit_antd_components as sac
 
-# --- FUNÇÃO DE LOGIN CENTRALIZADA ---
+# --- FUNÇÃO DE LOGIN CENTRALIZADA E ESTILIZADA (COM st.text_input) ---
 def login_form():
-    """Exibe o formulário de login centralizado na página."""
+    """Exibe o formulário de login centralizado e com design customizado."""
+    
+    # Carrega o CSS dos ícones do Bootstrap para ser usado no cabeçalho
+    st.markdown('<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">', unsafe_allow_html=True)
+
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
-        st.header("Bem-vindo! Por favor, faça o login.")
-        with st.form("login_form"):
-            username = st.text_input("Usuário")
-            password = st.text_input("Senha", type="password")
-            submitted = st.form_submit_button("Entrar")
+
+
+        # --- Formulário Streamlit ---
+        with st.form("login_form_styled"):
+            # --- Cabeçalho do Formulário ---
+            # Esta seção cria o título "Fazer Login" com o ícone e o subtítulo.
+            # As cores e fontes são controladas pelo style.css
+            st.markdown("""
+                <div class="login-header">
+                    <i class="bi bi-lock"></i>
+                    <div>
+                        <h2 class="login-title">Fazer login</h2>
+                        <p class="login-subtitle">Entre com suas credenciais para acessar o sistema</p>
+                    </div>
+                </div>
+            """, unsafe_allow_html=True)
+            st.write("\n"*3)  # Espaçamento entre o cabeçalho e os campos
+            # --- Campo de Email ---
+            # 1. Label customizado (controlado via CSS)
+            st.markdown('<p class="input-label">Email</p>', unsafe_allow_html=True)
+            # 2. Input do Streamlit (sem o label padrão)
+            username = st.text_input(
+                "Email", 
+                placeholder="seu@email.com", 
+                label_visibility="collapsed"
+            )
+
+            # --- Campo de Senha ---
+            st.markdown('<p class="input-label">Senha</p>', unsafe_allow_html=True)
+            password = st.text_input(
+                "Senha", 
+                placeholder="Sua senha", 
+                type="password", 
+                label_visibility="collapsed"
+            )
+            
+            # --- Botão de Envio ---
+            # use_container_width=True faz o botão ocupar todo o espaço do formulário
+            submitted = st.form_submit_button("Entrar", use_container_width=True)
+
+            # --- Lógica de Autenticação ---
             if submitted:
                 try:
                     correct_usernames = st.secrets["credentials"]["usernames"]
@@ -25,6 +65,9 @@ def login_form():
                         st.error("Usuário ou senha incorretos.")
                 except Exception:
                     st.error("Arquivo de segredos (secrets.toml) não encontrado ou mal configurado.")
+        
+        # --- Fim do Container do Formulário ---
+        st.markdown('</div>', unsafe_allow_html=True)
 
 # --- PÁGINAS DO APLICATIVO ---
 
