@@ -30,6 +30,12 @@ div[data-testid="metric-container"]:hover {
     font-size: 30px;
     font-weight: bold;
 }
+.custom-title h3 {
+    color: #000000;
+    margin-bottom: 0px;
+    font-size: 23px;
+    font-weight: bold;
+}
 .custom-title p {
     color: #5a5a5a;
     margin-top: 0px;
@@ -114,4 +120,65 @@ div[data-testid="stTextInput"] {
 .login-container .stButton>button:hover {
     background-color: #4b505a;
     color: white;
+}
+
+/* === ESTILOS PARA OS CARDS DE MÉTRICAS DO DASHBOARD (NOVO E ROBUSTO) === */
+.metric-card {
+    background-color: #FFFFFF;
+    border: 1px solid #f0f2f6;
+    border-radius: 10px;
+    padding: 20px;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.05);
+    height: 150px; /* Altura fixa para alinhar os cards */
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+}
+.metric-card-label {
+    font-size: 17px;
+    color: #5a5a5a;
+}
+.metric-card-value {
+    font-size: 42px;
+    font-weight: bold;
+    color: #212529;
+    line-height: 1;
+}
+.metric-card-delta {
+    font-size: 15px;
+}
+.delta-positive {
+    color: #28a745; /* Verde */
+}
+.delta-negative {
+    color: #dc3545; /* Vermelho */
+}
+.delta-neutral {
+    color: #6c757d; /* Cinza */
+}
+/* === ESTILOS PARA OS CARDS DE RESUMO (SEGUNDA LINHA) === */
+.summary-card {
+    background-color: #FFFFFF;
+    border: 1px solid #f0f2f6; /* Borda mais suave */
+    border-radius: 10px;
+    padding: 20px;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.04);
+    height: 100px; /* Altura um pouco menor para resumo */
+    display: flex;
+    flex-direction: column;
+    justify-content: center; /* Centraliza verticalmente */
+    align-items: center;     /* Centraliza horizontalmente */
+    text-align: center;      /* Garante que o texto dentro esteja centrado */
+}
+
+.summary-card-value {
+    font-size: 38px;
+    font-weight: bold;
+    color: #212529;
+    line-height: 1.2;
+}
+
+.summary-card-label {
+    font-size: 16px;
+    color: #5a5a5a;
 }

@@ -70,9 +70,46 @@ def login_form():
         st.markdown('</div>', unsafe_allow_html=True)
 
 # --- PÁGINAS DO APLICATIVO ---
+# --- FUNÇÃO HELPER PARA CRIAR CARDS CUSTOMIZADOS ---
+def create_metric_card(label, value, delta, delta_color):
+    """Gera o HTML para um card de métrica customizado."""
+    
+    # Define a classe CSS para a cor do delta
+    if delta_color == "normal":
+        delta_class = "delta-positive"
+    elif delta_color == "inverse":
+        delta_class = "delta-negative"
+    else: # "off"
+        delta_class = "delta-neutral"
 
+    # Monta o HTML do card
+    card_html = f"""
+        <div class="metric-card">
+            <div>
+                <div class="metric-card-label">{label}</div>
+                <div class="metric-card-value">{value}</div>
+            </div>
+            <div class="metric-card-delta {delta_class}">{delta}</div>
+        </div>
+    """
+    return card_html
+
+# Adicione esta nova função em utils.py
+def create_summary_card(label, value):
+    """Gera o HTML para um card de resumo centralizado."""
+    card_html = f"""
+        <div class="summary-card">
+            <div class="summary-card-value">{value}</div>
+            <div class="summary-card-label">{label}</div>
+        </div>
+    """
+    return card_html
+
+# --- PÁGINA INICIAL (DASHBOARD) ---
 def home_page():
-    """Exibe a Página Inicial, que agora é o dashboard."""
+    """Exibe a Página Inicial com cards de métricas customizados."""
+    
+    # Título da página
     st.markdown("""
     <div class="custom-title-container">
         <div class="custom-title-bar"></div>
@@ -83,21 +120,38 @@ def home_page():
     </div>
     """, unsafe_allow_html=True)
     st.write("\n")
+
+    # --- Primeira Linha de Cards ---
     col1, col2, col3, col4 = st.columns(4)
-    with col1: st.metric(label="Pendentes", value="12", delta="Urgente: 3", delta_color="inverse")
-    with col2: st.metric(label="Hoje", value="28", delta="+15% vs ontem")
-    with col3: st.metric(label="Confirmados", value="24", delta="Taxa: 92.3%")
-    with col4: st.metric(label="Profissionais", value="8", delta="Ativos no sistema")
+    with col1:
+        st.markdown(create_metric_card("Pendentes", "12", "Urgente: 3", "inverse"), unsafe_allow_html=True)
+    with col2:
+        st.markdown(create_metric_card("Hoje", "28", "+15% vs ontem", "normal"), unsafe_allow_html=True)
+    with col3:
+        st.markdown(create_metric_card("Confirmados", "24", "Taxa: 92.3%", "off"), unsafe_allow_html=True)
+    with col4:
+        st.markdown(create_metric_card("Profissionais", "8", "Ativos no sistema", "off"), unsafe_allow_html=True)
+
     st.markdown("<br>", unsafe_allow_html=True)
-    st.write("#### 📈 Resumo da Semana")
+    st.markdown("""
+    <div class="custom-title">
+        <h3>Resumo da Semana</h3>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # --- Segunda Linha de Cards (ATUALIZADA PARA USAR A NOVA FUNÇÃO) ---
     col5, col6, col7, col8 = st.columns(4)
-    with col5: st.metric(label="Total Agendamentos", value="156")
-    with col6: st.metric(label="Confirmados", value="144")
-    with col7: st.metric(label="Pendentes", value="9")
-    with col8: st.metric(label="Cancelados", value="3")
+    with col5:
+        st.markdown(create_summary_card("Total Agendamentos", "156"), unsafe_allow_html=True)
+    with col6:
+        st.markdown(create_summary_card("Confirmados", "144"), unsafe_allow_html=True)
+    with col7:
+        st.markdown(create_summary_card("Pendentes", "9"), unsafe_allow_html=True)
+    with col8:
+        st.markdown(create_summary_card("Cancelados", "3"), unsafe_allow_html=True)
 
 # Funções placeholder para as outras páginas
-def confirmation_queue_page(): st.title("Fila de Confirmação")
+def confirmation_queue_page(): st.title("Aprovação")
 def daily_schedule_page(): st.title("Agenda do Dia")
 def management_page(): st.title("Gestão Geral")
 def confirmation_page(): st.title("Confirmação")
@@ -135,7 +189,7 @@ def main_app(logo_path):
 
     # Roteamento de páginas
     if selected_page == 'Página Inicial': home_page()
-    elif selected_page == 'Fila de Confirmação': confirmation_queue_page()
+    elif selected_page == 'Aprovação': confirmation_queue_page()
     elif selected_page == 'Agenda do Dia': daily_schedule_page()
     elif selected_page == 'Gestão': management_page()
     elif selected_page == 'Confirmação': confirmation_page()
