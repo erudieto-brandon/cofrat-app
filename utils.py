@@ -57,6 +57,7 @@ def create_metric_card(label, value, delta, delta_color):
     delta_class = {"normal": "delta-positive", "inverse": "delta-negative"}.get(delta_color, "delta-neutral")
     return f'<div class="metric-card"><div><div class="metric-card-label">{label}</div><div class="metric-card-value">{value}</div></div><div class="metric-card-delta {delta_class}">{delta}</div></div>'
 
+# --- FUNÇÃO HELPER PARA SUMMARY CARDS ---
 def create_summary_card(label, value):
     return f'<div class="summary-card"><div class="summary-card-value">{value}</div><div class="summary-card-label">{label}</div></div>'
 
@@ -90,11 +91,83 @@ def home_page():
 
 # --- PÁGINA DE APROVAÇÃO ---
 def get_sample_appointments():
+    """
+    Retorna uma lista expandida de agendamentos fictícios para a fila de aprovação,
+    conectando-se com os dados da página 'Agenda do Dia'.
+    """
+    today = date.today()
+    
+    # Dicionário para traduzir os dias da semana para português
+    dias_semana = {
+        0: "segunda-feira", 1: "terça-feira", 2: "quarta-feira", 
+        3: "quinta-feira", 4: "sexta-feira", 5: "sábado", 6: "domingo"
+    }
+    meses = {
+        1: "janeiro", 2: "fevereiro", 3: "março", 4: "abril", 5: "maio", 6: "junho",
+        7: "julho", 8: "agosto", 9: "setembro", 10: "outubro", 11: "novembro", 12: "dezembro"
+    }
+
+    # Função auxiliar para formatar a data de forma amigável
+    def format_date(d):
+        dia_semana = dias_semana[d.weekday()]
+        return f"{dia_semana}, {d.day} de {meses[d.month]} de {d.year}"
+
     return [
-        {"name": "Maria Silva Santos", "initials": "MS", "phone": "(11) 99999-1234", "specialty": "Fisioterapia", "date": "domingo, 14 de janeiro de 2024", "time": "10:00", "professional": "Dra. Liliane Santos", "insurance": "Unimed", "card_number": "0 123 456789 00-1", "event": "Consulta", "notes": "Paciente com dor nas costas, primeira consulta."},
-        {"name": "João Pereira Costa", "initials": "JP", "phone": "(21) 98888-5678", "specialty": "Ortopedia", "date": "segunda, 15 de janeiro de 2024", "time": "11:30", "professional": "Dr. Carlos Andrade", "insurance": "Bradesco Saúde", "card_number": "9 876 543210 99-8", "event": "Retorno", "notes": "Pós-operatório do joelho direito."}
+        # --- Exemplos conectados da 'Agenda do Dia' ---
+        {
+            "name": "Ricardo Gomes Alves", "initials": "RG", "phone": "(81) 99876-5432", 
+            "specialty": "Ortopedia", "date": format_date(today), "time": "09:00", 
+            "professional": "Dr. Carlos Mendes", "insurance": "Amil", 
+            "card_number": "1 234 567890 12-3", "event": "Primeira Consulta", 
+            "notes": "Paciente encaminhado com suspeita de lesão no menisco. Trazer exames anteriores."
+        },
+        {
+            "name": "Letícia Barros de Souza", "initials": "LB", "phone": "(31) 98765-4321", 
+            "specialty": "Cardiologia", "date": format_date(today + timedelta(days=3)), "time": "14:30", 
+            "professional": "Dr. Lucas Martins", "insurance": "SulAmérica", 
+            "card_number": "2 345 678901 23-4", "event": "Check-up Anual", 
+            "notes": "Paciente solicitou reagendamento da semana passada. Verificar histórico de pressão arterial."
+        },
+        {
+            "name": "Patrícia Moreira Lima", "initials": "PM", "phone": "(21) 97654-3210", 
+            "specialty": "Ortopedia", "date": format_date(today + timedelta(days=8)), "time": "11:00", 
+            "professional": "Dr. Carlos Mendes", "insurance": "Bradesco Saúde", 
+            "card_number": "3 456 789012 34-5", "event": "Retorno", 
+            "notes": "Retorno para avaliação de fisioterapia pós-fratura no tornozelo."
+        },
+        {
+            "name": "Pedro Lima Santos", "initials": "PL", "phone": "(11) 96543-2109", 
+            "specialty": "Nutrição", "date": format_date(today - timedelta(days=22)), "time": "16:00", 
+            "professional": "Dr. Roberto Lima", "insurance": "NotreDame Intermédica", 
+            "card_number": "4 567 890123 45-6", "event": "Consulta de Acompanhamento", 
+            "notes": "Paciente em processo de reeducação alimentar. Apresentar diário alimentar."
+        },
+        
+        # --- Novos exemplos para enriquecer a fila ---
+        {
+            "name": "Vanessa Ribeiro Costa", "initials": "VR", "phone": "(48) 99123-4567", 
+            "specialty": "Psicologia", "date": format_date(today + timedelta(days=1)), "time": "10:30", 
+            "professional": "Dra. Sofia Almeida", "insurance": "Particular", 
+            "card_number": "N/A", "event": "Sessão de Terapia", 
+            "notes": "Primeira sessão. Foco em ansiedade e estresse no trabalho."
+        },
+        {
+            "name": "Marcos Aurélio Bastos", "initials": "MA", "phone": "(61) 98234-5678", 
+            "specialty": "Fisioterapia", "date": format_date(today + timedelta(days=2)), "time": "08:00", 
+            "professional": "Dra. Ana Costa", "insurance": "Unimed", 
+            "card_number": "5 678 901234 56-7", "event": "Sessão de Reabilitação", 
+            "notes": "Paciente em reabilitação de cirurgia no ombro. 5ª sessão de 10."
+        },
+        {
+            "name": "Cláudia Ohana Dias", "initials": "CO", "phone": "(71) 99988-7766", 
+            "specialty": "Cardiologia", "date": format_date(today + timedelta(days=5)), "time": "15:00", 
+            "professional": "Dr. Lucas Martins", "insurance": "CASSI", 
+            "card_number": "6 789 012345 67-8", "event": "Exame (MAPA)", 
+            "notes": "Paciente precisa de instruções pré-exame. Entrar em contato para confirmar o recebimento das orientações."
+        }
     ]
 
+# --- Função para exibir a mensagem de conclusão ---
 def display_completion_message():
     """Exibe a mensagem de conclusão quando todos os agendamentos são processados."""
     st.markdown("""
@@ -112,6 +185,7 @@ def display_completion_message():
             st.session_state.current_appointment_index = 0
             st.rerun()
 
+# --- PÁGINA DE FILA DE APROVAÇÃO ---
 def confirmation_queue_page():
     """Exibe a fila de aprovação usando st.dialog para os diálogos."""
         # --- [LINHA ADICIONADA] ---
@@ -264,21 +338,48 @@ def confirmation_queue_page():
     if st.session_state.show_reschedule_dialog:
         reschedule_dialog()
 
-
 # --- DADOS E FUNÇÕES PARA A PÁGINA DE AGENDA DO DIA ---
 def get_daily_agenda_for_dataframe():
-    """Retorna dados fictícios para a tabela da agenda com mais variedade."""
+    """Retorna dados fictícios para a tabela da agenda com mais variedade e datas dinâmicas."""
+    today = date.today()
+    # Função auxiliar para criar datas relativas ao dia de hoje
+    def d(days_offset):
+        return (today + timedelta(days=days_offset)).strftime('%Y-%m-%d')
+
     return [
-        {"name": "Maria Silva Santos", "scheduled_date": "2025-01-15", "professional": "Dr. Carlos Mendes", "category": "Ortopedia", "status": "Confirmado"},
-        {"name": "João Carlos Oliveira", "scheduled_date": "2025-01-15", "professional": "Dra. Ana Costa", "category": "Fisioterapia", "status": "Confirmado"},
-        {"name": "Ana Paula Costa", "scheduled_date": "2025-01-16", "professional": "Dr. Carlos Mendes", "category": "Ortopedia", "status": "Cancelado"},
-        {"name": "Pedro Lima Santos", "scheduled_date": "2025-01-22", "professional": "Dr. Roberto Lima", "category": "Nutrição", "status": "Reagendando"},
-        {"name": "Carla Ferreira", "scheduled_date": "2025-02-10", "professional": "Dra. Ana Costa", "category": "Fisioterapia", "status": "Confirmado"},
-        {"name": "Roberto Silva", "scheduled_date": "2025-02-18", "professional": "Dr. Roberto Lima", "category": "Nutrição", "status": "Confirmado"},
-        {"name": "Beatriz Oliveira", "scheduled_date": "2025-03-05", "professional": "Dr. Carlos Mendes", "category": "Ortopedia", "status": "Confirmado"},
-        {"name": "Gabriel Santos", "scheduled_date": "2025-04-01", "professional": "Dra. Ana Costa", "category": "Fisioterapia", "status": "Cancelado"},
+        # --- Agendamentos para a semana atual ---
+        {"name": "Juliana Martins", "scheduled_date": d(0), "professional": "Dra. Ana Costa", "category": "Fisioterapia", "status": "Confirmado"},
+        {"name": "Ricardo Gomes", "scheduled_date": d(0), "professional": "Dr. Carlos Mendes", "category": "Ortopedia", "status": "Pendente"},
+        {"name": "Fernanda Lima", "scheduled_date": d(1), "professional": "Dr. Roberto Lima", "category": "Nutrição", "status": "Confirmado"},
+        {"name": "Bruno Azevedo", "scheduled_date": d(2), "professional": "Dra. Sofia Almeida", "category": "Psicologia", "status": "Confirmado"},
+        {"name": "Letícia Barros", "scheduled_date": d(3), "professional": "Dr. Lucas Martins", "category": "Cardiologia", "status": "Reagendando"},
+        {"name": "Vinicius Moraes", "scheduled_date": d(-1), "professional": "Dra. Ana Costa", "category": "Fisioterapia", "status": "Confirmado"},
+        {"name": "Camila Rocha", "scheduled_date": d(-2), "professional": "Dr. Carlos Mendes", "category": "Ortopedia", "status": "Cancelado"},
+
+        # --- Agendamentos de semanas anteriores ---
+        {"name": "Daniela Vieira", "scheduled_date": d(-7), "professional": "Dra. Sofia Almeida", "category": "Psicologia", "status": "Confirmado"},
+        {"name": "Gustavo Pereira", "scheduled_date": d(-10), "professional": "Dr. Lucas Martins", "category": "Cardiologia", "status": "Confirmado"},
+        {"name": "Amanda Nunes", "scheduled_date": d(-12), "professional": "Dr. Roberto Lima", "category": "Nutrição", "status": "Cancelado"},
+        {"name": "Felipe Arruda", "scheduled_date": d(-15), "professional": "Dra. Ana Costa", "category": "Fisioterapia", "status": "Confirmado"},
+
+        # --- Agendamentos de semanas futuras ---
+        {"name": "Patrícia Moreira", "scheduled_date": d(8), "professional": "Dr. Carlos Mendes", "category": "Ortopedia", "status": "Pendente"},
+        {"name": "Thiago Brandão", "scheduled_date": d(11), "professional": "Dr. Roberto Lima", "category": "Nutrição", "status": "Confirmado"},
+        {"name": "Larissa Farias", "scheduled_date": d(14), "professional": "Dra. Sofia Almeida", "category": "Psicologia", "status": "Confirmado"},
+        {"name": "Eduardo Costa", "scheduled_date": d(20), "professional": "Dr. Lucas Martins", "category": "Cardiologia", "status": "Confirmado"},
+
+        # --- Dados originais com datas ajustadas para o passado ---
+        {"name": "Maria Silva Santos", "scheduled_date": d(-30), "professional": "Dr. Carlos Mendes", "category": "Ortopedia", "status": "Confirmado"},
+        {"name": "João Carlos Oliveira", "scheduled_date": d(-29), "professional": "Dra. Ana Costa", "category": "Fisioterapia", "status": "Confirmado"},
+        {"name": "Ana Paula Costa", "scheduled_date": d(-28), "professional": "Dr. Carlos Mendes", "category": "Ortopedia", "status": "Cancelado"},
+        {"name": "Pedro Lima Santos", "scheduled_date": d(-22), "professional": "Dr. Roberto Lima", "category": "Nutrição", "status": "Reagendando"},
+        {"name": "Carla Ferreira", "scheduled_date": d(-45), "professional": "Dra. Ana Costa", "category": "Fisioterapia", "status": "Confirmado"},
+        {"name": "Roberto Silva", "scheduled_date": d(-40), "professional": "Dr. Roberto Lima", "category": "Nutrição", "status": "Confirmado"},
+        {"name": "Beatriz Oliveira", "scheduled_date": d(-60), "professional": "Dr. Carlos Mendes", "category": "Ortopedia", "status": "Confirmado"},
+        {"name": "Gabriel Santos", "scheduled_date": d(-50), "professional": "Dra. Ana Costa", "category": "Fisioterapia", "status": "Cancelado"},
     ]
 
+# --- Função para calcular o intervalo de datas ---
 def get_date_range(selected_date, view_mode):
     """Calcula o intervalo de datas com base no modo de visualização."""
     if view_mode == "Todo o período":
@@ -300,6 +401,7 @@ def get_date_range(selected_date, view_mode):
         end_of_quarter = start_of_quarter + relativedelta(months=3) - timedelta(days=1)
         return start_of_quarter, end_of_quarter
 
+# --- Função para limpar todos os filtros ---
 def clear_filters_callback():
     """Função de callback para limpar todos os filtros."""
     st.session_state.view_mode = "Todo o período"
@@ -309,14 +411,17 @@ def clear_filters_callback():
     st.session_state.status_filter = "Todos"
     st.session_state.search_term = ""
 
+# --- PÁGINAS ---
+# --- PÁGINA DA AGENDA DO DIA ---
 def daily_schedule_page():
     """Exibe a agenda do dia com filtros interativos e o novo design na tabela."""
     st.subheader("Filtros")
     
     # --- INICIALIZAÇÃO DO SESSION STATE ---
     if "view_mode" not in st.session_state:
-        st.session_state.view_mode = "Todo o período"
-        st.session_state.selected_date = date(2025, 1, 15)
+        # [MODIFICADO] O padrão agora é 'Semana' e a data de hoje.
+        st.session_state.view_mode = "Semana"
+        st.session_state.selected_date = date.today()
         st.session_state.prof_filter = "Todos"
         st.session_state.cat_filter = "Todos"
         st.session_state.status_filter = "Todos"
@@ -328,7 +433,14 @@ def daily_schedule_page():
     # --- BARRA DE FILTROS COMPLETA ---
     with st.container(border=False):
         col1, col2 = st.columns([3, 2])
-        col1.radio("Visualização:", ["Dia", "Semana", "Mês", "Trimestre", "Todo o período"], horizontal=True, key="view_mode")
+        # [MODIFICADO] O 'index' do radio foi ajustado para corresponder ao novo padrão 'Semana'
+        col1.radio(
+            "Visualização:", 
+            ["Dia", "Semana", "Mês", "Trimestre", "Todo o período"], 
+            horizontal=True, 
+            key="view_mode",
+            index=1 # Define "Semana" como o item selecionado por padrão
+        )
         col2.date_input("Data:", key="selected_date", disabled=(st.session_state.view_mode == "Todo o período"))
 
         f_col1, f_col2, f_col3, f_col4 = st.columns(4)
@@ -356,7 +468,7 @@ def daily_schedule_page():
     if st.session_state.search_term:
         filtered_df = filtered_df[filtered_df['name'].str.contains(st.session_state.search_term, case=False, na=False)]
 
-    # --- CABEÇALHO DINÂMICO ---
+    # --- CABEÇALHO DINÂMICO E BOTÃO DE UPLOAD ---
     if st.session_state.view_mode == "Dia":
         st.header(f"Agendamentos para {st.session_state.selected_date.strftime('%d/%m/%Y')}")
     elif st.session_state.view_mode == "Todo o período":
@@ -364,7 +476,20 @@ def daily_schedule_page():
     else:
         st.header(f"Agendamentos de {start_date.strftime('%d/%m/%Y')} até {end_date.strftime('%d/%m/%Y')}")
 
-    # --- Tabela de Agendamentos com o novo container para estilização ---
+    # --- CONTADORES DINÂMICOS ---
+    total_agendamentos = len(filtered_df[filtered_df['status'] != 'Cancelado'])
+    confirmados = len(filtered_df[filtered_df['status'] == 'Confirmado'])
+    pendentes = len(filtered_df[~filtered_df['status'].isin(['Confirmado', 'Cancelado'])])
+
+    st.markdown(f"""
+    <div style="display: flex; align-items: center; gap: 20px; font-size: 1.1rem; margin-bottom: 15px;">
+        <span><i class="bi bi-people-fill"></i> <b>{total_agendamentos}</b> agendamentos</span>
+        <span style="color: #28a745;"><b>{confirmados}</b> confirmadas</span>
+        <span style="color: #ffc107;"><b>{pendentes}</b> pendentes</span>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # --- Tabela de Agendamentos ---
     st.markdown('<div class="agenda-table-container">', unsafe_allow_html=True)
     st.dataframe(
         filtered_df.rename(columns={
@@ -379,12 +504,18 @@ def daily_schedule_page():
     )
     st.markdown('</div>', unsafe_allow_html=True)
 
-# --- PÁGINAS ADICIONAIS (PLACEHOLDERS) ---
+    st.file_uploader(
+        "📄 Carregar agendamentos PDF",
+        type="pdf",
+        accept_multiple_files=True,
+        label_visibility="collapsed"
+    )
 
+# --- PÁGINA DE GESTÃO ---
 def management_page():
-    st.title("Gestão")
-    st.write("Gerencie seus agendamentos de forma eficiente")
-
+    st.write('##### Organize cadastros, especialidades e agendas com eficiência')
+    st.write('Esta página permite o cadastro e edição dos médicos, com controle de status (Ativo/Inativo) conforme disponibilidade de agenda. Também é possível gerenciar as modalidades de atendimento — como Fisioterapia, Ortopedia, RPG e outras — e configurar os horários de disponibilidade de cada profissional. Tudo em um só lugar, para garantir uma operação fluida e organizada.')
+    st.write('')
     selected_tab = sac.segmented(
         items=[
             sac.SegmentedItem(label='Médicos', icon='person-fill'),
@@ -487,9 +618,11 @@ def management_page():
                     day_cols[2].button(f"Cap: {cap}", key=f"cap_{i}_{day}", disabled=True, use_container_width=True)
             st.write("") # Espaço entre os cards
 
-# --- [INÍCIO] CÓDIGO MODIFICADO ---
+# --- PÁGINA DE CONFIRMAÇÃO DE AGENDAMENTOS ---
 def confirmation_page():
-    st.title("Comunicação")
+    st.write('##### Comunicação em massa para agendamentos')
+    st.write('Esta página permite confirmar ou cancelar agendamentos em massa, especialmente útil em casos de indisponibilidade de agenda dos profissionais. Agilize a comunicação com os pacientes de forma rápida e organizada.')
+    st.write('')
 
     # --- DIÁLOGO DE PREVIEW (definido antes para poder ser chamado) ---
     @st.dialog("Preview da Mensagem")
@@ -624,11 +757,13 @@ def confirmation_page():
 
     if st.session_state.show_preview_dialog:
         preview_dialog()
-# --- [FIM] CÓDIGO MODIFICADO ---
 
+# --- PÁGINA DE PACIENTES ---
 def patients_page():
-    st.title("Pacientes")
-    st.write("Gerencie informações e histórico dos pacientes.")
+    st.write('##### Gerencie os cadastros de pacientes com praticidade')
+    st.write('Esta página permite o cadastro e edição dos dados dos pacientes, garantindo que todas as informações estejam organizadas e acessíveis para os atendimentos.')
+    st.write('')
+
 
     header_cols = st.columns([3, 1])
     with header_cols[0]:
@@ -654,6 +789,7 @@ def patients_page():
     st.dataframe(df_patients, use_container_width=True, hide_index=True)
     st.caption("Ações como editar e excluir podem ser adicionadas ao selecionar uma linha ou através de um menu de contexto em futuras implementações.")
 
+# --- PÁGINA DE RELATÓRIOS ---
 def reports_page():
     st.title("Relatórios")
     st.write("Visualize métricas e dados importantes sobre os agendamentos.")
