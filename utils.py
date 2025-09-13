@@ -124,7 +124,7 @@ def home_page():
     # --- Primeira Linha de Cards ---
     col1, col2, col3, col4 = st.columns(4)
     with col1:
-        st.markdown(create_metric_card("Pendentes", "12", "Urgente: 3", "inverse"), unsafe_allow_html=True)
+        st.markdown(create_metric_card("Pendentes", "12", "Sem resposta faz tempo: 3 ", "inverse"), unsafe_allow_html=True)
     with col2:
         st.markdown(create_metric_card("Hoje", "28", "+15% vs ontem", "normal"), unsafe_allow_html=True)
     with col3:
@@ -151,7 +151,11 @@ def home_page():
         st.markdown(create_summary_card("Cancelados", "3"), unsafe_allow_html=True)
 
 # Funções placeholder para as outras páginas
-def confirmation_queue_page(): st.title("Aprovação")
+def confirmation_queue_page():
+    st.title("Aprovação")
+    st.write("Aqui você pode aprovar ou rejeitar agendamentos pendentes.")
+
+
 def daily_schedule_page(): st.title("Agenda do Dia")
 def management_page(): st.title("Gestão Geral")
 def confirmation_page(): st.title("Confirmação")
@@ -175,7 +179,7 @@ def main_app(logo_path):
                 sac.MenuItem('Pacientes', icon='people'),
                 sac.MenuItem('Relatórios', icon='clipboard-data'),
             ]),
-            sac.MenuItem('Comunicação', type='group', icon='chat-dots', children=[
+            sac.MenuItem('Comunicação', type='group', children=[
                 sac.MenuItem('Confirmação', icon='check2-square'),
                 sac.MenuItem('Suporte', icon='whatsapp', href='https://wa.me/+5511959044561'),
             ]),
