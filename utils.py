@@ -1,22 +1,18 @@
 import streamlit as st
 import streamlit_antd_components as sac
+from datetime import date, timedelta
+import pandas as pd
+from dateutil.relativedelta import relativedelta
 
 # --- FUNÇÃO DE LOGIN CENTRALIZADA E ESTILIZADA ---
 def login_form():
     """Exibe o formulário de login centralizado e com design customizado."""
     
-    # Carrega o CSS dos ícones do Bootstrap para ser usado no cabeçalho
     st.markdown('<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">', unsafe_allow_html=True)
 
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
-
-
-        # --- Formulário Streamlit ---
         with st.form("login_form_styled"):
-            # --- Cabeçalho do Formulário ---
-            # Esta seção cria o título "Fazer Login" com o ícone e o subtítulo.
-            # As cores e fontes são controladas pelo style.css
             st.markdown("""
                 <div class="login-header">
                     <i class="bi bi-lock"></i>
@@ -26,32 +22,13 @@ def login_form():
                     </div>
                 </div>
             """, unsafe_allow_html=True)
-            st.write("\n"*3)  # Espaçamento entre o cabeçalho e os campos
-            # --- Campo de Email ---
-            # 1. Label customizado (controlado via CSS)
+            st.write("\n"*3)
             st.markdown('<p class="input-label">Email</p>', unsafe_allow_html=True)
-            # 2. Input do Streamlit (sem o label padrão)
-            username = st.text_input(
-                "Email", 
-                placeholder="seu@email.com", 
-                label_visibility="collapsed"
-            )
-
-            # --- Campo de Senha ---
+            username = st.text_input("Email", placeholder="seu@email.com", label_visibility="collapsed")
             st.markdown('<p class="input-label">Senha</p>', unsafe_allow_html=True)
-            password = st.text_input(
-                "Senha", 
-                placeholder="Sua senha", 
-                type="password", 
-                label_visibility="collapsed"
-            )
+            password = st.text_input("Senha", placeholder="Sua senha", type="password", label_visibility="collapsed")
             
-            # --- Botão de Envio ---
-            # use_container_width=True faz o botão ocupar todo o espaço do formulário
-            submitted = st.form_submit_button("Entrar", use_container_width=True)
-
-            # --- Lógica de Autenticação ---
-            if submitted:
+            if st.form_submit_button("Entrar", use_container_width=True):
                 try:
                     correct_usernames = st.secrets["credentials"]["usernames"]
                     correct_passwords = st.secrets["credentials"]["passwords"]
@@ -65,51 +42,17 @@ def login_form():
                         st.error("Usuário ou senha incorretos.")
                 except Exception:
                     st.error("Arquivo de segredos (secrets.toml) não encontrado ou mal configurado.")
-        
-        # --- Fim do Container do Formulário ---
-        st.markdown('</div>', unsafe_allow_html=True)
 
-# --- PÁGINAS DO APLICATIVO ---
-# --- FUNÇÃO HELPER PARA CRIAR CARDS CUSTOMIZADOS ---
+# --- FUNÇÕES HELPER PARA CARDS ---
 def create_metric_card(label, value, delta, delta_color):
-    """Gera o HTML para um card de métrica customizado."""
-    
-    # Define a classe CSS para a cor do delta
-    if delta_color == "normal":
-        delta_class = "delta-positive"
-    elif delta_color == "inverse":
-        delta_class = "delta-negative"
-    else: # "off"
-        delta_class = "delta-neutral"
+    delta_class = {"normal": "delta-positive", "inverse": "delta-negative"}.get(delta_color, "delta-neutral")
+    return f'<div class="metric-card"><div><div class="metric-card-label">{label}</div><div class="metric-card-value">{value}</div></div><div class="metric-card-delta {delta_class}">{delta}</div></div>'
 
-    # Monta o HTML do card
-    card_html = f"""
-        <div class="metric-card">
-            <div>
-                <div class="metric-card-label">{label}</div>
-                <div class="metric-card-value">{value}</div>
-            </div>
-            <div class="metric-card-delta {delta_class}">{delta}</div>
-        </div>
-    """
-    return card_html
-
-# Adicione esta nova função em utils.py
 def create_summary_card(label, value):
-    """Gera o HTML para um card de resumo centralizado."""
-    card_html = f"""
-        <div class="summary-card">
-            <div class="summary-card-value">{value}</div>
-            <div class="summary-card-label">{label}</div>
-        </div>
-    """
-    return card_html
+    return f'<div class="summary-card"><div class="summary-card-value">{value}</div><div class="summary-card-label">{label}</div></div>'
 
 # --- PÁGINA INICIAL (DASHBOARD) ---
 def home_page():
-    """Exibe a Página Inicial com cards de métricas customizados."""
-    
-    # Título da página
     st.markdown("""
     <div class="custom-title-container">
         <div class="custom-title-bar"></div>
@@ -121,59 +64,26 @@ def home_page():
     """, unsafe_allow_html=True)
     st.write("\n")
 
-    # --- Primeira Linha de Cards ---
     col1, col2, col3, col4 = st.columns(4)
-    with col1:
-        st.markdown(create_metric_card("Pendentes", "12", "Sem resposta faz tempo: 3 ", "inverse"), unsafe_allow_html=True)
-    with col2:
-        st.markdown(create_metric_card("Hoje", "28", "+15% vs ontem", "normal"), unsafe_allow_html=True)
-    with col3:
-        st.markdown(create_metric_card("Confirmados", "24", "Taxa: 92.3%", "off"), unsafe_allow_html=True)
-    with col4:
-        st.markdown(create_metric_card("Profissionais", "8", "Ativos no sistema", "off"), unsafe_allow_html=True)
+    col1.markdown(create_metric_card("Pendentes", "12", "Sem resposta faz tempo: 3 ", "inverse"), unsafe_allow_html=True)
+    col2.markdown(create_metric_card("Hoje", "28", "+15% vs ontem", "normal"), unsafe_allow_html=True)
+    col3.markdown(create_metric_card("Confirmados", "24", "Taxa: 92.3%", "off"), unsafe_allow_html=True)
+    col4.markdown(create_metric_card("Profissionais", "8", "Ativos no sistema", "off"), unsafe_allow_html=True)
 
     st.markdown("<br>", unsafe_allow_html=True)
-    st.markdown("""
-    <div class="custom-title">
-        <h3>Resumo da Semana</h3>
-    </div>
-    """, unsafe_allow_html=True)
+    st.markdown('<h3>Resumo da Semana</h3>', unsafe_allow_html=True)
 
-    # --- Segunda Linha de Cards (ATUALIZADA PARA USAR A NOVA FUNÇÃO) ---
     col5, col6, col7, col8 = st.columns(4)
-    with col5:
-        st.markdown(create_summary_card("Total Agendamentos", "156"), unsafe_allow_html=True)
-    with col6:
-        st.markdown(create_summary_card("Confirmados", "144"), unsafe_allow_html=True)
-    with col7:
-        st.markdown(create_summary_card("Pendentes", "9"), unsafe_allow_html=True)
-    with col8:
-        st.markdown(create_summary_card("Cancelados", "3"), unsafe_allow_html=True)
+    col5.markdown(create_summary_card("Total Agendamentos", "156"), unsafe_allow_html=True)
+    col6.markdown(create_summary_card("Confirmados", "144"), unsafe_allow_html=True)
+    col7.markdown(create_summary_card("Pendentes", "9"), unsafe_allow_html=True)
+    col8.markdown(create_summary_card("Cancelados", "3"), unsafe_allow_html=True)
 
+# --- PÁGINA DE APROVAÇÃO ---
 def get_sample_appointments():
-    """Retorna uma lista de dados de agendamentos fictícios."""
     return [
-        {
-            "name": "Maria Silva Santos", "initials": "MS", "phone": "(11) 99999-1234",
-            "specialty": "Fisioterapia", "date": "domingo, 14 de janeiro de 2024", "time": "10:00",
-            "professional": "Dra. Liliane Santos", "insurance": "Unimed",
-            "card_number": "0 123 456789 00-1", "event": "Consulta",
-            "notes": "Paciente com dor nas costas, primeira consulta."
-        },
-        {
-            "name": "João Pereira Costa", "initials": "JP", "phone": "(21) 98888-5678",
-            "specialty": "Ortopedia", "date": "segunda, 15 de janeiro de 2024", "time": "11:30",
-            "professional": "Dr. Carlos Andrade", "insurance": "Bradesco Saúde",
-            "card_number": "9 876 543210 99-8", "event": "Retorno",
-            "notes": "Pós-operatório do joelho direito."
-        },
-        {
-            "name": "Ana Beatriz Lima", "initials": "AB", "phone": "(31) 97777-4321",
-            "specialty": "Fisioterapia", "date": "terça, 16 de janeiro de 2024", "time": "09:00",
-            "professional": "Dra. Liliane Santos", "insurance": "Amil",
-            "card_number": "1 112 223334 44-5", "event": "Primeira Avaliação",
-            "notes": "Encaminhada para avaliação de RPG."
-        }
+        {"name": "Maria Silva Santos", "initials": "MS", "phone": "(11) 99999-1234", "specialty": "Fisioterapia", "date": "domingo, 14 de janeiro de 2024", "time": "10:00", "professional": "Dra. Liliane Santos", "insurance": "Unimed", "card_number": "0 123 456789 00-1", "event": "Consulta", "notes": "Paciente com dor nas costas, primeira consulta."},
+        {"name": "João Pereira Costa", "initials": "JP", "phone": "(21) 98888-5678", "specialty": "Ortopedia", "date": "segunda, 15 de janeiro de 2024", "time": "11:30", "professional": "Dr. Carlos Andrade", "insurance": "Bradesco Saúde", "card_number": "9 876 543210 99-8", "event": "Retorno", "notes": "Pós-operatório do joelho direito."}
     ]
 
 def display_completion_message():
@@ -189,7 +99,7 @@ def display_completion_message():
     # Centraliza o botão usando colunas
     _, col2, _ = st.columns([1, 1.2, 1])
     with col2:
-        if st.button("Voltar à Página Inicial", use_container_width=True, key="reset_queue"):
+        if st.button("Reiniciar a Fila de Aprovação", use_container_width=True, key="reset_queue"):
             st.session_state.current_appointment_index = 0
             st.rerun()
 
@@ -344,7 +254,129 @@ def confirmation_queue_page():
         reschedule_dialog()
 
 
-def daily_schedule_page(): st.title("Agenda do Dia")
+# --- DADOS E FUNÇÕES PARA A PÁGINA DE AGENDA DO DIA ---
+def get_daily_agenda_for_dataframe():
+    """Retorna dados fictícios para a tabela da agenda com mais variedade."""
+    return [
+        {"name": "Maria Silva Santos", "scheduled_date": "2025-01-15", "professional": "Dr. Carlos Mendes", "category": "Ortopedia", "status": "Confirmado"},
+        {"name": "João Carlos Oliveira", "scheduled_date": "2025-01-15", "professional": "Dra. Ana Costa", "category": "Fisioterapia", "status": "Confirmado"},
+        {"name": "Ana Paula Costa", "scheduled_date": "2025-01-16", "professional": "Dr. Carlos Mendes", "category": "Ortopedia", "status": "Cancelado"},
+        {"name": "Pedro Lima Santos", "scheduled_date": "2025-01-22", "professional": "Dr. Roberto Lima", "category": "Nutrição", "status": "Reagendando"},
+        {"name": "Carla Ferreira", "scheduled_date": "2025-02-10", "professional": "Dra. Ana Costa", "category": "Fisioterapia", "status": "Confirmado"},
+        {"name": "Roberto Silva", "scheduled_date": "2025-02-18", "professional": "Dr. Roberto Lima", "category": "Nutrição", "status": "Confirmado"},
+        {"name": "Beatriz Oliveira", "scheduled_date": "2025-03-05", "professional": "Dr. Carlos Mendes", "category": "Ortopedia", "status": "Confirmado"},
+        {"name": "Gabriel Santos", "scheduled_date": "2025-04-01", "professional": "Dra. Ana Costa", "category": "Fisioterapia", "status": "Cancelado"},
+    ]
+
+def get_date_range(selected_date, view_mode):
+    """Calcula o intervalo de datas com base no modo de visualização."""
+    if view_mode == "Todo o período":
+        return date.min, date.max
+    if view_mode == "Dia":
+        return selected_date, selected_date
+    elif view_mode == "Semana":
+        start_of_week = selected_date - timedelta(days=selected_date.weekday())
+        end_of_week = start_of_week + timedelta(days=6)
+        return start_of_week, end_of_week
+    elif view_mode == "Mês":
+        start_of_month = selected_date.replace(day=1)
+        end_of_month = start_of_month + relativedelta(months=1) - timedelta(days=1)
+        return start_of_month, end_of_month
+    elif view_mode == "Trimestre":
+        current_quarter = (selected_date.month - 1) // 3 + 1
+        start_month_of_quarter = 3 * current_quarter - 2
+        start_of_quarter = date(selected_date.year, start_month_of_quarter, 1)
+        end_of_quarter = start_of_quarter + relativedelta(months=3) - timedelta(days=1)
+        return start_of_quarter, end_of_quarter
+
+def clear_filters_callback():
+    """Função de callback para limpar todos os filtros."""
+    st.session_state.view_mode = "Todo o período"
+    st.session_state.selected_date = date(2025, 1, 15)
+    st.session_state.prof_filter = "Todos"
+    st.session_state.cat_filter = "Todos"
+    st.session_state.status_filter = "Todos"
+    st.session_state.search_term = ""
+
+def daily_schedule_page():
+    """Exibe a agenda do dia com filtros interativos e funcionais."""
+    st.subheader("\n")
+    st.subheader("Filtros")
+    
+    # --- INICIALIZAÇÃO DO SESSION STATE ---
+    # Garante que todos os filtros tenham um valor padrão na primeira execução
+    if "view_mode" not in st.session_state:
+        st.session_state.view_mode = "Todo o período"
+        st.session_state.selected_date = date(2025, 1, 15)
+        st.session_state.prof_filter = "Todos"
+        st.session_state.cat_filter = "Todos"
+        st.session_state.status_filter = "Todos"
+        st.session_state.search_term = ""
+
+    # Carrega os dados e converte a coluna de data
+    df = pd.DataFrame(get_daily_agenda_for_dataframe())
+    df['scheduled_date'] = pd.to_datetime(df['scheduled_date']).dt.date
+
+    # --- BARRA DE FILTROS COMPLETA ---
+    with st.container(border=False):
+        # --- Primeira linha de filtros ---
+        col1, col2 = st.columns([3, 2])
+        col1.radio("Visualização:", ["Dia", "Semana", "Mês", "Trimestre", "Todo o período"], horizontal=True, key="view_mode")
+        # O valor do date_input agora é controlado pelo session_state, sem default aqui
+        col2.date_input("Data:", key="selected_date", disabled=(st.session_state.view_mode == "Todo o período"))
+
+        # --- Segunda linha de filtros ---
+        f_col1, f_col2, f_col3, f_col4 = st.columns(4)
+        f_col1.selectbox("Todos os profissionais", ["Todos"] + sorted(df['professional'].unique().tolist()), key="prof_filter")
+        f_col2.selectbox("Todas as categorias", ["Todos"] + sorted(df['category'].unique().tolist()), key="cat_filter")
+        f_col3.selectbox("Todos os status", ["Todos"] + sorted(df['status'].unique().tolist()), key="status_filter")
+        f_col4.selectbox("Todos os pacientes", ["Todos"], key="patient_filter", disabled=True)
+
+        # --- Terceira linha de filtros ---
+        search_col, btn_col = st.columns([4, 1.08])
+        search_col.text_input("Buscar paciente...", placeholder="Buscar paciente...", label_visibility="collapsed", key="search_term")
+        btn_col.button("Limpar Filtros", use_container_width=True, on_click=clear_filters_callback)
+
+    # --- LÓGICA DE FILTRAGEM ---
+    start_date, end_date = get_date_range(st.session_state.selected_date, st.session_state.view_mode)
+    
+    filtered_df = df
+    if st.session_state.view_mode != "Todo o período":
+        filtered_df = df[
+            (df['scheduled_date'] >= start_date) & (df['scheduled_date'] <= end_date)
+        ]
+    
+    if st.session_state.prof_filter != "Todos":
+        filtered_df = filtered_df[filtered_df['professional'] == st.session_state.prof_filter]
+    if st.session_state.cat_filter != "Todos":
+        filtered_df = filtered_df[filtered_df['category'] == st.session_state.cat_filter]
+    if st.session_state.status_filter != "Todos":
+        filtered_df = filtered_df[filtered_df['status'] == st.session_state.status_filter]
+    if st.session_state.search_term:
+        filtered_df = filtered_df[filtered_df['name'].str.contains(st.session_state.search_term, case=False, na=False)]
+
+    # --- CABEÇALHO DINÂMICO ---
+    if st.session_state.view_mode == "Dia":
+        st.header(f"Agendamentos para {st.session_state.selected_date.strftime('%d/%m/%Y')}")
+    elif st.session_state.view_mode == "Todo o período":
+        st.header("Exibindo todos os agendamentos")
+    else:
+        st.header(f"Agendamentos de {start_date.strftime('%d/%m/%Y')} até {end_date.strftime('%d/%m/%Y')}")
+
+    # --- Tabela de Agendamentos ---
+    st.dataframe(
+        filtered_df.rename(columns={
+            'name': 'Paciente',
+            'scheduled_date': 'Data Agendada',
+            'professional': 'Profissional',
+            'category': 'Categoria',
+            'status': 'Status'
+        }),
+        use_container_width=True,
+        hide_index=True
+    )
+
+# --- PÁGINAS ADICIONAIS (PLACEHOLDERS) ---
 def management_page(): st.title("Gestão Geral")
 def confirmation_page(): st.title("Confirmação")
 def patients_page(): st.title("Pacientes")
@@ -371,19 +403,22 @@ def main_app(logo_path):
                 sac.MenuItem('Confirmação', icon='check2-square'),
                 sac.MenuItem('Suporte', icon='whatsapp', href='https://wa.me/+5511959044561'),
             ]),
-        ], color='#294960', open_all=True, return_index=False) # open_all=True para visualização
+        ], color='#294960', open_all=True, return_index=False)
         
-
         if st.sidebar.button("Logout"):
             st.session_state["authentication_status"] = False
             st.session_state["username"] = None
             st.rerun()
 
     # Roteamento de páginas
-    if selected_page == 'Página Inicial': home_page()
-    elif selected_page == 'Aprovação': confirmation_queue_page()
-    elif selected_page == 'Agenda do Dia': daily_schedule_page()
-    elif selected_page == 'Gestão': management_page()
-    elif selected_page == 'Confirmação': confirmation_page()
-    elif selected_page == 'Pacientes': patients_page()
-    elif selected_page == 'Relatórios': reports_page()
+    page_map = {
+        'Página Inicial': home_page,
+        'Aprovação': confirmation_queue_page,
+        'Agenda do Dia': daily_schedule_page,
+        'Gestão': management_page,
+        'Confirmação': confirmation_page,
+        'Pacientes': patients_page,
+        'Relatórios': reports_page
+    }
+    page_function = page_map.get(selected_page, home_page)
+    page_function()
