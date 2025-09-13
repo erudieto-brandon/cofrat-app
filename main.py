@@ -29,7 +29,8 @@ if "authentication_status" not in st.session_state:
 
 # Verifica o estado de autenticação para decidir o que mostrar
 if not st.session_state["authentication_status"]:
-    login_form()
+    # MODIFICAÇÃO: Passe o caminho do logo para a função
+    login_form(logo_path=LOGO_EXTENDED_PATH) 
 else:
     # Passa o caminho do logo para a função que renderiza o app principal
     main_app(logo_path=LOGO_EXTENDED_PATH)

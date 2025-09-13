@@ -1,14 +1,23 @@
+# utils.py
 import streamlit as st
 import streamlit_antd_components as sac
 from datetime import date, timedelta
 import pandas as pd
 from dateutil.relativedelta import relativedelta
+import numpy as np # Adicionado para dados de exemplo
 
 # --- FUNÇÃO DE LOGIN CENTRALIZADA E ESTILIZADA ---
-def login_form():
-    """Exibe o formulário de login centralizado e com design customizado."""
-    
+def login_form(logo_path): # MODIFICAÇÃO: Adicionado o parâmetro 'logo_path'
+    """Exibe o logotipo e o formulário de login centralizado."""
     st.markdown('<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">', unsafe_allow_html=True)
+
+    # --- [NOVO] CÓDIGO PARA EXIBIR O LOGOTIPO CENTRALIZADO ---
+    logo_col1, logo_col2, logo_col3 = st.columns([1.4, 1, 1])
+    with logo_col2:
+        st.image(logo_path, width=200)
+    
+    st.write("\n") # Adiciona um espaço entre o logo e o formulário
+    # --- FIM DO CÓDIGO NOVO ---
 
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
@@ -105,7 +114,9 @@ def display_completion_message():
 
 def confirmation_queue_page():
     """Exibe a fila de aprovação usando st.dialog para os diálogos."""
-    
+        # --- [LINHA ADICIONADA] ---
+    # Este CSS específico para a página move o container para cima, sobrescrevendo o estilo global.
+    st.markdown('<style>div.block-container {padding-top: 1.5rem;}</style>', unsafe_allow_html=True)
     st.markdown('<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">', unsafe_allow_html=True)
 
     # --- Estado inicial ---
@@ -299,12 +310,10 @@ def clear_filters_callback():
     st.session_state.search_term = ""
 
 def daily_schedule_page():
-    """Exibe a agenda do dia com filtros interativos e funcionais."""
-    st.subheader("\n")
+    """Exibe a agenda do dia com filtros interativos e o novo design na tabela."""
     st.subheader("Filtros")
     
     # --- INICIALIZAÇÃO DO SESSION STATE ---
-    # Garante que todos os filtros tenham um valor padrão na primeira execução
     if "view_mode" not in st.session_state:
         st.session_state.view_mode = "Todo o período"
         st.session_state.selected_date = date(2025, 1, 15)
@@ -313,26 +322,21 @@ def daily_schedule_page():
         st.session_state.status_filter = "Todos"
         st.session_state.search_term = ""
 
-    # Carrega os dados e converte a coluna de data
     df = pd.DataFrame(get_daily_agenda_for_dataframe())
     df['scheduled_date'] = pd.to_datetime(df['scheduled_date']).dt.date
 
     # --- BARRA DE FILTROS COMPLETA ---
     with st.container(border=False):
-        # --- Primeira linha de filtros ---
         col1, col2 = st.columns([3, 2])
         col1.radio("Visualização:", ["Dia", "Semana", "Mês", "Trimestre", "Todo o período"], horizontal=True, key="view_mode")
-        # O valor do date_input agora é controlado pelo session_state, sem default aqui
         col2.date_input("Data:", key="selected_date", disabled=(st.session_state.view_mode == "Todo o período"))
 
-        # --- Segunda linha de filtros ---
         f_col1, f_col2, f_col3, f_col4 = st.columns(4)
         f_col1.selectbox("Todos os profissionais", ["Todos"] + sorted(df['professional'].unique().tolist()), key="prof_filter")
         f_col2.selectbox("Todas as categorias", ["Todos"] + sorted(df['category'].unique().tolist()), key="cat_filter")
         f_col3.selectbox("Todos os status", ["Todos"] + sorted(df['status'].unique().tolist()), key="status_filter")
         f_col4.selectbox("Todos os pacientes", ["Todos"], key="patient_filter", disabled=True)
 
-        # --- Terceira linha de filtros ---
         search_col, btn_col = st.columns([4, 1.08])
         search_col.text_input("Buscar paciente...", placeholder="Buscar paciente...", label_visibility="collapsed", key="search_term")
         btn_col.button("Limpar Filtros", use_container_width=True, on_click=clear_filters_callback)
@@ -342,10 +346,7 @@ def daily_schedule_page():
     
     filtered_df = df
     if st.session_state.view_mode != "Todo o período":
-        filtered_df = df[
-            (df['scheduled_date'] >= start_date) & (df['scheduled_date'] <= end_date)
-        ]
-    
+        filtered_df = df[(df['scheduled_date'] >= start_date) & (df['scheduled_date'] <= end_date)]
     if st.session_state.prof_filter != "Todos":
         filtered_df = filtered_df[filtered_df['professional'] == st.session_state.prof_filter]
     if st.session_state.cat_filter != "Todos":
@@ -363,7 +364,8 @@ def daily_schedule_page():
     else:
         st.header(f"Agendamentos de {start_date.strftime('%d/%m/%Y')} até {end_date.strftime('%d/%m/%Y')}")
 
-    # --- Tabela de Agendamentos ---
+    # --- Tabela de Agendamentos com o novo container para estilização ---
+    st.markdown('<div class="agenda-table-container">', unsafe_allow_html=True)
     st.dataframe(
         filtered_df.rename(columns={
             'name': 'Paciente',
@@ -375,12 +377,315 @@ def daily_schedule_page():
         use_container_width=True,
         hide_index=True
     )
+    st.markdown('</div>', unsafe_allow_html=True)
 
 # --- PÁGINAS ADICIONAIS (PLACEHOLDERS) ---
-def management_page(): st.title("Gestão Geral")
-def confirmation_page(): st.title("Confirmação")
-def patients_page(): st.title("Pacientes")
-def reports_page(): st.title("Relatórios")
+
+def management_page():
+    st.title("Gestão")
+    st.write("Gerencie seus agendamentos de forma eficiente")
+
+    selected_tab = sac.segmented(
+        items=[
+            sac.SegmentedItem(label='Médicos', icon='person-fill'),
+            sac.SegmentedItem(label='Modalidades', icon='tags-fill'),
+            sac.SegmentedItem(label='Agendas', icon='calendar-week-fill'),
+        ],
+        align='left',
+        size='mid',
+        return_index=False, # Retorna o label do item
+        color='#28a745',
+    )
+
+    if selected_tab == 'Médicos':
+        header_cols = st.columns([3, 1])
+        with header_cols[0]:
+            st.subheader("Profissionais de Saúde")
+        with header_cols[1]:
+            st.button("✚ Adicionar Profissional", type="primary", use_container_width=True)
+
+        # Dados de exemplo
+        professionals = [
+            {"name": "Dra. Liliane Santos", "specialty": "Fisioterapia", "schedule": "Segunda a Sexta", "capacity": 10},
+            {"name": "Dr. Roberto Silva", "specialty": "Ortopedia", "schedule": "Segunda a Sexta", "capacity": 8},
+            {"name": "Dra. Carla Mendes", "specialty": "Fisioterapia Infantil", "schedule": "Segunda a Sexta", "capacity": 6},
+        ]
+
+        # Layout em colunas
+        cols = st.columns(3)
+        for i, prof in enumerate(professionals):
+            with cols[i % 3]:
+                with st.container(border=True):
+                    st.markdown(f"##### 🩺 {prof['name']}")
+                    st.write(prof['specialty'])
+                    st.write(f"🕒 {prof['schedule']}")
+                    st.write(f" kapacita: {prof['capacity']} pacientes/horário")
+                    
+                    btn_cols = st.columns(2)
+                    btn_cols[0].button("Editar", key=f"edit_{i}", use_container_width=True)
+                    btn_cols[1].button("Desativar", key=f"del_{i}", use_container_width=True)
+
+    elif selected_tab == 'Modalidades':
+        header_cols = st.columns([3, 1])
+        with header_cols[0]:
+            st.subheader("Modalidades de Atendimento")
+        with header_cols[1]:
+            st.button("✚ Adicionar Modalidade", type="primary", use_container_width=True)
+
+        modalities = [
+            {"name": "Fisioterapia", "desc": "Tratamento de reabilitação física"},
+            {"name": "Ortopedia", "desc": "Consultas e tratamentos ortopédicos"},
+            {"name": "Fisioterapia Infantil", "desc": "Fisioterapia especializada para crianças"},
+        ]
+        
+        cols = st.columns(3)
+        for i, mod in enumerate(modalities):
+            with cols[i % 3]:
+                with st.container(border=True, height=180):
+                    st.markdown(f"##### {mod['name']}")
+                    st.write(mod['desc'])
+                    
+                    st.write("") # Espaçador
+                    
+                    btn_cols = st.columns(2)
+                    btn_cols[0].button("Editar", key=f"edit_mod_{i}", use_container_width=True)
+                    btn_cols[1].button("🗑️", key=f"del_mod_{i}", use_container_width=True)
+
+    elif selected_tab == 'Agendas':
+        st.subheader("Configuração de Agendas")
+
+        agendas = [
+            {"name": "Dra. Liliane Santos", "specialty": "Fisioterapia", "schedule": [
+                ("Segunda-feira", "08:00 - 17:00", 10), ("Terça-feira", "08:00 - 17:00", 10),
+                ("Quarta-feira", "08:00 - 17:00", 10), ("Quinta-feira", "08:00 - 17:00", 10),
+                ("Sexta-feira", "08:00 - 17:00", 10)
+            ]},
+            {"name": "Dr. Roberto Silva", "specialty": "Ortopedia", "schedule": [
+                ("Segunda-feira", "09:00 - 16:00", 8), ("Quarta-feira", "09:00 - 16:00", 8),
+                ("Sexta-feira", "09:00 - 16:00", 8)
+            ]},
+            {"name": "Dra. Carla Mendes", "specialty": "Fisioterapia Infantil", "schedule": [
+                ("Terça-feira", "08:00 - 12:00", 6), ("Quinta-feira", "08:00 - 12:00", 6)
+            ]},
+        ]
+
+        for i, agenda in enumerate(agendas):
+            with st.container(border=True):
+                header_cols = st.columns([3, 1])
+                with header_cols[0]:
+                    st.markdown(f"##### 🧑‍⚕️ {agenda['name']}")
+                    st.caption(agenda['specialty'])
+                with header_cols[1]:
+                    st.button("Editar", key=f"edit_agenda_{i}", use_container_width=True, type="primary")
+                
+                st.write("") # Espaçador
+
+                for day, time, cap in agenda['schedule']:
+                    day_cols = st.columns([2, 2, 1])
+                    day_cols[0].text(day)
+                    day_cols[1].text(time)
+                    day_cols[2].button(f"Cap: {cap}", key=f"cap_{i}_{day}", disabled=True, use_container_width=True)
+            st.write("") # Espaço entre os cards
+
+# --- [INÍCIO] CÓDIGO MODIFICADO ---
+def confirmation_page():
+    st.title("Comunicação")
+
+    # --- DIÁLOGO DE PREVIEW (definido antes para poder ser chamado) ---
+    @st.dialog("Preview da Mensagem")
+    def preview_dialog():
+        message_template = st.session_state.get('message_template', "Olá, {$primeiro_nome}! Confirmando seu agendamento de {$modalidade} para amanhã às {$horario}. Atenciosamente, COFRAT.")
+        selected_patients_df = st.session_state.edited_df[st.session_state.edited_df['Selecionar']]
+
+        if selected_patients_df.empty:
+            st.warning("Nenhum paciente selecionado para visualizar.")
+        else:
+            for _, row in selected_patients_df.iterrows():
+                with st.container(border=True):
+                    st.markdown(f"**Para: {row['Paciente']}**")
+                    
+                    preview_message = message_template.replace('{$primeiro_nome}', str(row['Paciente']).split(' ')[0])
+                    preview_message = preview_message.replace('{$modalidade}', str(row['Modalidade']))
+                    preview_message = preview_message.replace('{$horario}', str(row['Horário']))
+                    
+                    # CSS CORRIGIDO: Removido margin-top negativo para evitar que o box saia do container.
+                    st.markdown(f"""
+                    <div style="background-color: #e9f7ef; padding: 10px; border-radius: 5px; color: #155724; margin-top: -5px; margin-bottom: 15px">
+                        {preview_message}
+                    </div>
+                    """, unsafe_allow_html=True)
+
+        if st.button("Fechar", use_container_width=True, key="close_preview"):
+            st.session_state.show_preview_dialog = False
+            st.rerun()
+
+    # --- INICIALIZAÇÃO DO SESSION STATE ---
+    if 'show_preview_dialog' not in st.session_state:
+        st.session_state.show_preview_dialog = False
+        
+    if 'edited_df' not in st.session_state:
+        data = {
+            'Selecionar': [True, True, True, True, True],
+            'Paciente': ['Maria Silva Santos', 'João Carlos Oliveira', 'Ana Beatriz Costa', 'Pedro Lima Silva', 'Fernanda Costa'],
+            'Horário': ['08:00', '08:30', '09:00', '09:30', '10:00'],
+            'Modalidade': ['Fisioterapia', 'Ortopedia', 'Fisioterapia Infantil', 'Fisioterapia', 'Ortopedia'],
+            'Profissional': ['Dra. Liliane', 'Dr. Roberto', 'Dra. Marina', 'Dra. Liliane', 'Dr. Roberto'],
+            'Status': ['Confirmado', 'Confirmado', 'Confirmado', 'Pendente', 'Confirmado'],
+            'Telefone': ['(11) 99999-9999', '(11) 88888-8888', '(11) 77777-7777', '(11) 66666-6666', '(11) 55555-5555']
+        }
+        st.session_state.edited_df = pd.DataFrame(data)
+
+    # --- NOVO LAYOUT DA PÁGINA EM DUAS COLUNAS ---
+    left_col, right_col = st.columns([1, 2])
+
+    with left_col:
+        with st.container(border=True):
+            st.subheader("🗓️ Selecionar Data")
+            st.caption("Escolha o dia para visualizar os agendamentos")
+            
+            selected_date = st.date_input(
+                "Selecione o dia", 
+                date(2025, 9, 13),
+                label_visibility="collapsed"
+            )
+            
+            st.markdown(f"""
+            <div style="background-color: #f0f2f6; padding: 10px; border-radius: 5px; margin-top: 10px; margin-bottom: 10px">
+                Data selecionada: <b>{selected_date.strftime('%d/%m/%Y')}</b>
+            </div>
+            """, unsafe_allow_html=True)
+
+    with right_col:
+        with st.container(border=True):
+            st.subheader("📋 Template de Mensagem")
+            st.caption("Configure a mensagem que será enviada aos pacientes")
+            
+            message = st.text_area(
+                "Mensagem:", 
+                "Olá, {$primeiro_nome}! Confirmando seu agendamento de {$modalidade} para amanhã às {$horario}. Atenciosamente, COFRAT.",
+                height=120,
+                key='message_template'
+            )
+
+            st.markdown("**Variáveis Disponíveis:**")
+            variables_html = """
+            <div style="font-size: 0.9rem; line-height: 1.6;">
+                <b>{$primeiro_nome}</b>: Primeiro nome do paciente<br>
+                <b>{$modalidade}</b>: Tipo de consulta/tratamento<br>
+                <b>{$horario}</b>: Horário do agendamento<br>
+                <b>{$data}</b>: Data do agendamento<br>
+                <b>{$profissional}</b>: Nome do profissional
+            </div>
+            """
+            st.markdown(variables_html, unsafe_allow_html=True)
+            st.write("")
+
+            # PREVIEW DINÂMICO para o primeiro paciente da lista
+            if not st.session_state.edited_df.empty:
+                first_patient = st.session_state.edited_df.iloc[0]
+                current_template = st.session_state.get('message_template', "")
+                
+                preview_text = current_template.replace('{$primeiro_nome}', str(first_patient['Paciente']).split(' ')[0])
+                preview_text = preview_text.replace('{$modalidade}', str(first_patient['Modalidade']))
+                preview_text = preview_text.replace('{$horario}', str(first_patient['Horário']))
+                
+                st.caption("Preview:")
+                st.markdown(f"_{preview_text}_")
+            
+            st.write("")
+
+            selected_count = int(st.session_state.edited_df['Selecionar'].sum())
+            btn_cols = st.columns(2)
+            if btn_cols[0].button("Visualizar Preview", use_container_width=True):
+                st.session_state.show_preview_dialog = True
+                st.rerun()
+            
+            btn_cols[1].button(f"✉️ Enviar Mensagens ({selected_count})", use_container_width=True, type="primary")
+
+    # --- TABELA DE AGENDAMENTOS ---
+    st.write("---")
+    st.subheader(f"Agendamentos do Dia ({selected_date.strftime('%d/%m/%Y')})")
+
+    all_selected = all(st.session_state.edited_df['Selecionar'])
+    def toggle_all():
+        new_value = not all_selected
+        st.session_state.edited_df['Selecionar'] = new_value
+
+    st.checkbox("Selecionar Todos", value=all_selected, on_change=toggle_all, key="select_all_checkbox")
+
+    edited_df = st.data_editor(
+        st.session_state.edited_df,
+        use_container_width=True,
+        hide_index=True,
+        disabled=['Paciente', 'Horário', 'Modalidade', 'Profissional', 'Status', 'Telefone'],
+        key='appointments_editor'
+    )
+    st.session_state.edited_df = edited_df
+
+    if st.session_state.show_preview_dialog:
+        preview_dialog()
+# --- [FIM] CÓDIGO MODIFICADO ---
+
+def patients_page():
+    st.title("Pacientes")
+    st.write("Gerencie informações e histórico dos pacientes.")
+
+    header_cols = st.columns([3, 1])
+    with header_cols[0]:
+        st.subheader("Cadastro de Pacientes")
+    with header_cols[1]:
+        st.button("✚ Novo Paciente", type="primary", use_container_width=True)
+
+    filter_cols = st.columns([3, 1])
+    filter_cols[0].text_input("Buscar por nome, telefone ou email...", placeholder="🔍 Buscar por nome, telefone ou email...", label_visibility="collapsed")
+    filter_cols[1].button("Filtros", use_container_width=True)
+
+    # Dados de exemplo para a tabela de pacientes
+    data = {
+        'PACIENTE': ['Maria Silva Santos', 'João Carlos Oliveira', 'Ana Paula Costa', 'Pedro Lima Santos'],
+        'CONTATO': ['maria.silva@email.com', 'joao.carlos@email.com', 'ana.paula@email.com', 'pedro.lima@email.com'],
+        'CONVÊNIO': ['Unimed', 'Bradesco Saúde', 'SulAmérica', 'Amil'],
+        'ÚLTIMO ATENDIMENTO': ['09/01/2024', '11/01/2024', '13/01/2024', '14/12/2023'],
+        'TOTAL DE CONSULTAS': [15, 8, 3, 12],
+        'STATUS': ['Ativo', 'Ativo', 'Ativo', 'Inativo']
+    }
+    df_patients = pd.DataFrame(data)
+
+    st.dataframe(df_patients, use_container_width=True, hide_index=True)
+    st.caption("Ações como editar e excluir podem ser adicionadas ao selecionar uma linha ou através de um menu de contexto em futuras implementações.")
+
+def reports_page():
+    st.title("Relatórios")
+    st.write("Visualize métricas e dados importantes sobre os agendamentos.")
+
+    # Métricas principais
+    kpi_cols = st.columns(4)
+    kpi_cols[0].metric("Consultas no Mês", "245", "+12% vs Mês Anterior")
+    kpi_cols[1].metric("Novos Pacientes", "32", "+5%")
+    kpi_cols[2].metric("Taxa de Confirmação", "93.5%", "1.2%")
+    kpi_cols[3].metric("Taxa de Cancelamento", "4.1%", "-0.5%")
+    
+    st.write("---")
+
+    chart_cols = st.columns(2)
+    with chart_cols[0]:
+        st.subheader("Agendamentos por Modalidade")
+        # Dados de exemplo para o gráfico de barras
+        chart_data = pd.DataFrame({
+            "Modalidade": ["Fisioterapia", "Ortopedia", "Fisioterapia Inf.", "Pilates", "Acupuntura"],
+            "Agendamentos": [110, 75, 30, 22, 8],
+        })
+        st.bar_chart(chart_data, x="Modalidade", y="Agendamentos", color="#0b9035")
+
+    with chart_cols[1]:
+        st.subheader("Evolução de Novos Pacientes (Últimos 6 Meses)")
+        # Dados de exemplo para o gráfico de linha
+        chart_data_line = pd.DataFrame(
+            np.random.randint(15, 40, size=(6, 1)),
+            columns=['Novos Pacientes'],
+            index=pd.to_datetime(['2025-04-01', '2025-05-01', '2025-06-01', '2025-07-01', '2025-08-01', '2025-09-01'])
+        )
+        st.line_chart(chart_data_line)
 
 # --- LÓGICA PRINCIPAL DO APLICATIVO (LOGADO) ---
 def main_app(logo_path):
@@ -403,7 +708,7 @@ def main_app(logo_path):
                 sac.MenuItem('Confirmação', icon='check2-square'),
                 sac.MenuItem('Suporte', icon='whatsapp', href='https://wa.me/+5511959044561'),
             ]),
-        ], color='#294960', open_all=True, return_index=False)
+        ], color='#28a745', open_all=True, return_index=False)
         
         if st.sidebar.button("Logout"):
             st.session_state["authentication_status"] = False

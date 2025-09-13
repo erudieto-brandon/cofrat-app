@@ -6,7 +6,7 @@ body {
 }
 div.block-container {
     background-color: transparent;
-    padding-top: 1.5rem;
+    padding-top: 4rem;
 }
 div[data-testid="metric-container"] {
     background-color: #FFFFFF;
@@ -171,7 +171,7 @@ div[data-testid="stProgressBar"] > div {
     font-weight: bold;
 }
 .patient-name { font-size: 20px; font-weight: bold; color: #212529; }
-.patient-phone { font-size: 14px; color: #5a5a5a; }
+.patient-phone { font-size: 17px; color: #5a5a5a; }
 .patient-phone .bi { margin-right: 5px; }
 .specialty-tag {
     background-color: #eefff2;
@@ -295,4 +295,53 @@ div[data-testid="stProgressBar"] > div {
 .completion-container div[data-testid="stButton"] button:hover {
     background-color: #345c79;
     color: white;
+}
+
+/* === (NOVO) ESTILO PARA A TABELA DA AGENDA DO DIA (BASEADO NO CARD DE APROVAÇÃO) === */
+
+/* Container que envolve a tabela, aplicando o estilo de card */
+.agenda-table-container div[data-testid="stDataFrame"] {
+    background-color: #FFFFFF;
+    border: 1px solid #f0f2f6;
+    border-radius: 12px;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.04);
+    overflow: hidden; /* Garante que o conteúdo respeite a borda arredondada */
+}
+
+/* Remove a borda padrão do componente para usar a do nosso container */
+.agenda-table-container div[data-testid="stDataFrame"] > div > div {
+    border: none !important;
+}
+
+/* Cabeçalho da tabela (Nomes das colunas) */
+.agenda-table-container .col_heading {
+    background-color: #FFFFFF !important;
+    color: #5a5a5a; /* Cor cinza para os rótulos, como no card */
+    font-size: 13px;
+    font-weight: 500; /* Peso mais leve */
+    text-transform: uppercase; /* Transforma em maiúsculas */
+    letter-spacing: 0.5px; /* Espaçamento entre letras */
+    padding: 16px 12px;
+    border-bottom: 1px solid #f0f2f6 !important; /* Linha divisória sutil */
+}
+
+/* Células de dados da tabela */
+.agenda-table-container .cell {
+    background-color: #FFFFFF !important;
+    color: #212529;
+    font-size: 15px;
+    font-weight: 500; /* Texto dos dados com mais destaque */
+    padding: 16px 12px;
+    border-bottom: 1px solid #f0f2f6 !important;
+    vertical-align: middle;
+}
+
+/* Efeito de hover nas linhas */
+.agenda-table-container .row:hover .cell {
+    background-color: #F9FAFB !important; /* Fundo cinza bem claro ao passar o mouse */
+}
+
+/* Remove a borda da última linha para um visual mais limpo */
+.agenda-table-container .row:last-child .cell {
+    border-bottom: none !important;
 }
