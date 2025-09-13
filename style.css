@@ -1,4 +1,13 @@
+/* style.css */
+
 /* === ESTILOS GERAIS E DO DASHBOARD === */
+body {
+    background-color: #F9FAFB;
+}
+div.block-container {
+    background-color: transparent;
+    padding-top: 1.5rem;
+}
 div[data-testid="metric-container"] {
     background-color: #FFFFFF;
     border: 1px solid #E0E0E0;
@@ -10,19 +19,9 @@ div[data-testid="metric-container"] {
 div[data-testid="metric-container"]:hover {
     box-shadow: 0 8px 16px rgba(0,0,0,0.2);
 }
-.stButton>button {
-    width: 100%;
-    border-radius: 5px;
-}
 .custom-title-container {
     display: flex;
     align-items: center;
-}
-.custom-title-bar {
-    width: 0px;
-    height: 0px;
-    background-color: #000000;
-    margin-right: 0px;
 }
 .custom-title h1 {
     color: #000000;
@@ -43,14 +42,6 @@ div[data-testid="metric-container"]:hover {
 }
 
 /* === ESTILOS PARA O FORMULÁRIO DE LOGIN === */
-
-/* Placeholder para o logo acima do formulário */
-.login-logo-placeholder {
-    height: 60px; /* Defina a altura do espaço para o seu logo */
-    margin-bottom: 20px;
-}
-
-/* Container principal do formulário (o card branco) */
 .login-container {
     background-color: #ffffff;
     padding: 35px;
@@ -58,56 +49,37 @@ div[data-testid="metric-container"]:hover {
     box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
     border: 1px solid #e0e0e0;
 }
-
-/* Cabeçalho dentro do formulário (ícone + textos) */
 .login-header {
     display: flex;
     align-items: center;
     gap: 15px;
     margin-bottom: 25px;
 }
-
-/* Ícone de cadeado no cabeçalho */
 .login-header .bi-lock {
     font-size: 20px;
-    /* Altere a cor do ícone principal aqui */
     color: #0b9035;
 }
-
-/* VERSÃO CORRIGIDA */
-/* Título principal do formulário (ex: "Fazer Login") */
 h2.login-title {
     font-weight: bold;
-    /* Altere o tamanho da fonte do título aqui */
     font-size: 22px;
     margin: 0;
 }
-/* Subtítulo do formulário */
 .login-subtitle {
     font-size: 14px;
-    /* Altere a cor do subtítulo aqui */
     color: #5a5a5a;
     margin: -20px;
 }
-
-/* Label customizado para os campos de input (Email, Senha) */
 .input-label {
     font-size: 14px;
     font-weight: 500;
     color: #333740;
     margin-bottom: -10px;
 }
-
-/* Espaçamento entre os campos de input */
 div[data-testid="stTextInput"] {
     margin-bottom: 15px;
 }
-
-/* Botão de Entrar dentro do container de login */
 .login-container .stButton>button {
-    /* Altere a cor de fundo do botão aqui */
-    background-color: #212529; /* Preto opaco / Cor carvão */
-    /* Altere a cor do texto do botão aqui */
+    background-color: #212529;
     color: white;
     border: none;
     padding: 12px 0;
@@ -115,70 +87,212 @@ div[data-testid="stTextInput"] {
     font-weight: bold;
     margin-top: 15px;
 }
-
-/* Efeito hover para o botão de Entrar */
 .login-container .stButton>button:hover {
     background-color: #4b505a;
     color: white;
 }
 
-/* === ESTILOS PARA OS CARDS DE MÉTRICAS DO DASHBOARD (NOVO E ROBUSTO) === */
+/* === ESTILOS PARA OS CARDS DE MÉTRICAS DO DASHBOARD === */
 .metric-card {
     background-color: #FFFFFF;
     border: 1px solid #f0f2f6;
     border-radius: 10px;
     padding: 20px;
     box-shadow: 0 4px 8px rgba(0,0,0,0.05);
-    height: 150px; /* Altura fixa para alinhar os cards */
+    height: 150px;
     display: flex;
     flex-direction: column;
     justify-content: space-between;
 }
-.metric-card-label {
-    font-size: 17px;
-    color: #5a5a5a;
-}
-.metric-card-value {
-    font-size: 42px;
-    font-weight: bold;
-    color: #212529;
-    line-height: 1;
-}
-.metric-card-delta {
-    font-size: 15px;
-}
-.delta-positive {
-    color: #28a745; /* Verde */
-}
-.delta-negative {
-    color: #dc3545; /* Vermelho */
-}
-.delta-neutral {
-    color: #6c757d; /* Cinza */
-}
-/* === ESTILOS PARA OS CARDS DE RESUMO (SEGUNDA LINHA) === */
+.metric-card-label { font-size: 17px; color: #5a5a5a; }
+.metric-card-value { font-size: 42px; font-weight: bold; color: #212529; line-height: 1; }
+.metric-card-delta { font-size: 15px; }
+.delta-positive { color: #28a745; }
+.delta-negative { color: #dc3545; }
+.delta-neutral { color: #6c757d; }
+
+/* === ESTILOS PARA OS CARDS DE RESUMO === */
 .summary-card {
     background-color: #FFFFFF;
-    border: 1px solid #f0f2f6; /* Borda mais suave */
+    border: 1px solid #f0f2f6;
     border-radius: 10px;
     padding: 20px;
     box-shadow: 0 4px 8px rgba(0,0,0,0.04);
-    height: 100px; /* Altura um pouco menor para resumo */
+    height: 100px;
     display: flex;
     flex-direction: column;
-    justify-content: center; /* Centraliza verticalmente */
-    align-items: center;     /* Centraliza horizontalmente */
-    text-align: center;      /* Garante que o texto dentro esteja centrado */
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+}
+.summary-card-value { font-size: 38px; font-weight: bold; color: #212529; line-height: 1.2; }
+.summary-card-label { font-size: 16px; color: #5a5a5a; }
+
+/* === ESTILOS PARA A PÁGINA DE APROVAÇÃO === */
+div[data-testid="stProgressBar"] > div {
+    background-color: #294960;
+}
+.progress-label {
+    text-align: right;
+    margin-top: -35px;
+    color: #5a5a5a;
+}
+.approval-card {
+    background-color: #FFFFFF;
+    border: 1px solid #E0E0E0;
+    border-radius: 12px;
+    padding: 25px;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+    margin-top: 20px;
+}
+.approval-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    border-bottom: 1px solid #f0f2f6;
+    padding-bottom: 20px;
+    margin-bottom: 10px;
+}
+.patient-info {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+.patient-avatar {
+    width: 50px;
+    height: 50px;
+    background-color: #0b9035;
+    color: white;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 20px;
+    font-weight: bold;
+}
+.patient-name { font-size: 20px; font-weight: bold; color: #212529; }
+.patient-phone { font-size: 14px; color: #5a5a5a; }
+.patient-phone .bi { margin-right: 5px; }
+.specialty-tag {
+    background-color: #eefff2;
+    color: #0b9035;
+    padding: 4px 12px;
+    border-radius: 15px;
+    font-size: 12px;
+    font-weight: 500;
+}
+.details-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 15px 25px;
+    padding: 10px 0;
+}
+.detail-item {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+.detail-item .bi { font-size: 20px; color: #0b9035; }
+.detail-label { font-size: 14px; color: #5a5a5a; }
+.detail-value { font-size: 16px; color: #212529; font-weight: 500; }
+.observations-section {
+    margin-top: 15px;
+    padding-top: 20px;
+    border-top: 1px solid #f0f2f6;
 }
 
-.summary-card-value {
-    font-size: 38px;
+/* --- ESTILO ESPECÍFICO PARA OS BOTÕES DE AÇÃO (APROVAR, ETC.) --- */
+.action-buttons-container div[data-testid="stButton"] > button {
+    border-radius: 8px;
+    padding: 8px 0;
+    font-weight: 600;
+    transition: all 0.2s;
+    font-size: 15px;
+}
+.action-buttons-container div:nth-of-type(1) div[data-testid="stButton"] > button {
+    background-color: #28a745;
+    color: white;
+    border: 1px solid #28a745;
+}
+.action-buttons-container div:nth-of-type(1) div[data-testid="stButton"] > button:hover {
+    background-color: #218838;
+    border-color: #1e7e34;
+}
+.action-buttons-container div:nth-of-type(2) div[data-testid="stButton"] > button {
+    background-color: #FFFFFF;
+    color: #344054;
+    border: 1px solid #D0D5DD;
+}
+.action-buttons-container div:nth-of-type(2) div[data-testid="stButton"] > button:hover {
+    background-color: #F9FAFB;
+    border-color: #BCC2CC;
+}
+.action-buttons-container div:nth-of-type(3) div[data-testid="stButton"] > button {
+    background-color: #FFFFFF;
+    color: #dc3545;
+    border: 1px solid #dc3545;
+}
+.action-buttons-container div:nth-of-type(3) div[data-testid="stButton"] > button:hover {
+    background-color: #dc3545;
+    color: white;
+}
+
+/* --- ESTILO ESPECÍFICO PARA O BOTÃO DE LOGOUT NA SIDEBAR --- */
+[data-testid="stSidebar"] .stButton > button {
+    background-color: #FFFFFF;
+    color: #344054;
+    border: 1px solid #D0D5DD;
+    border-radius: 8px;
+    font-weight: 600;
+}
+[data-testid="stSidebar"] .stButton > button:hover {
+    background-color: #F9FAFB;
+    border-color: #BCC2CC;
+}
+
+/* === ESTILOS PARA A TELA DE CONCLUSÃO === */
+.completion-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    margin-top: 8rem;
+}
+.completion-icon {
+    width: 72px;
+    height: 72px;
+    border-radius: 50%;
+    background-color: #E3FCEF;
+    color: #198754;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 36px;
+    font-weight: bold;
+    border: 6px solid #F2FCF7;
+    margin-bottom: 24px;
+}
+.completion-title {
+    font-size: 28px;
     font-weight: bold;
     color: #212529;
-    line-height: 1.2;
+    margin-bottom: 8px;
 }
-
-.summary-card-label {
+.completion-subtitle {
     font-size: 16px;
     color: #5a5a5a;
+    margin-bottom: 32px;
+}
+.completion-container div[data-testid="stButton"] button {
+    background-color: #294960;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    padding: 10px 0;
+    font-weight: 600;
+}
+.completion-container div[data-testid="stButton"] button:hover {
+    background-color: #345c79;
+    color: white;
 }
