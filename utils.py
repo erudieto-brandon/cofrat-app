@@ -4,7 +4,7 @@ import streamlit_antd_components as sac
 from datetime import date, timedelta
 import pandas as pd
 from dateutil.relativedelta import relativedelta
-import numpy as np # Adicionado para dados de exemplo
+import numpy as np
 
 # --- FUNÇÃO DE LOGIN CENTRALIZADA E ESTILIZADA ---
 def login_form(logo_path): # MODIFICAÇÃO: Adicionado o parâmetro 'logo_path'
@@ -37,7 +37,7 @@ def login_form(logo_path): # MODIFICAÇÃO: Adicionado o parâmetro 'logo_path'
             st.markdown('<p class="input-label">Senha</p>', unsafe_allow_html=True)
             password = st.text_input("Senha", placeholder="Sua senha", type="password", label_visibility="collapsed")
             
-            if st.form_submit_button("Entrar", use_container_width=True):
+            if st.form_submit_button("Entrar", width='stretch'):
                 try:
                     correct_usernames = st.secrets["credentials"]["usernames"]
                     correct_passwords = st.secrets["credentials"]["passwords"]
@@ -181,7 +181,7 @@ def display_completion_message():
     # Centraliza o botão usando colunas
     _, col2, _ = st.columns([1, 1.2, 1])
     with col2:
-        if st.button("Reiniciar a Fila de Aprovação", use_container_width=True, key="reset_queue"):
+        if st.button("Reiniciar a Fila de Aprovação", width='stretch', key="reset_queue"):
             st.session_state.current_appointment_index = 0
             st.rerun()
 
@@ -259,13 +259,13 @@ def confirmation_queue_page():
     # Botões de ação principais
     st.markdown('<div class="action-buttons-container">', unsafe_allow_html=True)
     cols = st.columns(3)
-    if cols[0].button("✓ Aprovar", use_container_width=True):
+    if cols[0].button("✓ Aprovar", width='stretch'):
         st.session_state.show_approve_dialog = True
         st.rerun()
-    if cols[1].button("↻ Reagendar", use_container_width=True):
+    if cols[1].button("↻ Reagendar", width='stretch'):
         st.session_state.show_reschedule_dialog = True
         st.rerun()
-    if cols[2].button("✕ Cancelar", use_container_width=True):
+    if cols[2].button("✕ Cancelar", width='stretch'):
         st.session_state.show_cancel_dialog = True
         st.rerun()
     st.markdown('</div>', unsafe_allow_html=True)
@@ -276,11 +276,11 @@ def confirmation_queue_page():
     @st.dialog("Confirmar Aprovação")
     def approve_dialog():
         st.write(f"Tem certeza que deseja aprovar o agendamento de **{current_appointment['name']}**?")
-        if st.button("Sim, Aprovar", use_container_width=True):
+        if st.button("Sim, Aprovar", width='stretch'):
             st.toast(f"{current_appointment['name']} aprovado(a)!", icon="✅")
             go_to_next()
             st.rerun()
-        if st.button("Voltar", use_container_width=True):
+        if st.button("Voltar", width='stretch'):
             st.session_state.show_approve_dialog = False
             st.rerun()
 
@@ -303,7 +303,7 @@ def confirmation_queue_page():
             ]
         )
 
-        if st.button("Sim, Cancelar", use_container_width=True):
+        if st.button("Sim, Cancelar", width='stretch'):
             st.toast(
                 f"{current_appointment['name']} cancelado(a). Motivo: {motivo}",
                 icon="🗑️"
@@ -311,7 +311,7 @@ def confirmation_queue_page():
             go_to_next()
             st.rerun()
 
-        if st.button("Voltar", use_container_width=True):
+        if st.button("Voltar", width='stretch'):
             st.session_state.show_cancel_dialog = False
             st.rerun()
 
@@ -327,11 +327,11 @@ def confirmation_queue_page():
         new_date = st.date_input("Nova Data")
         new_time = st.time_input("Novo Horário", step=1800)
         st.text_area("Mensagem para o Paciente (Opcional)")
-        if st.button("Enviar Sugestão", use_container_width=True):
+        if st.button("Enviar Sugestão", width='stretch'):
             st.toast("Sugestão de reagendamento enviada!", icon="👍")
             go_to_next()
             st.rerun()
-        if st.button("Cancelar", use_container_width=True):
+        if st.button("Cancelar", width='stretch'):
             st.session_state.show_reschedule_dialog = False
             st.rerun()
 
@@ -451,7 +451,7 @@ def daily_schedule_page():
 
         search_col, btn_col = st.columns([4, 1.08])
         search_col.text_input("Buscar paciente...", placeholder="Buscar paciente...", label_visibility="collapsed", key="search_term")
-        btn_col.button("Limpar Filtros", use_container_width=True, on_click=clear_filters_callback)
+        btn_col.button("Limpar Filtros", width='stretch', on_click=clear_filters_callback)
 
     # --- LÓGICA DE FILTRAGEM ---
     start_date, end_date = get_date_range(st.session_state.selected_date, st.session_state.view_mode)
@@ -499,7 +499,7 @@ def daily_schedule_page():
             'category': 'Categoria',
             'status': 'Status'
         }),
-        use_container_width=True,
+        width='stretch',
         hide_index=True
     )
     st.markdown('</div>', unsafe_allow_html=True)
@@ -533,7 +533,7 @@ def management_page():
         with header_cols[0]:
             st.subheader("Profissionais de Saúde")
         with header_cols[1]:
-            st.button("✚ Adicionar Profissional", type="primary", use_container_width=True)
+            st.button("✚ Adicionar Profissional", type="primary", width='stretch')
 
         # Dados de exemplo
         professionals = [
@@ -553,15 +553,15 @@ def management_page():
                     st.write(f" kapacita: {prof['capacity']} pacientes/horário")
                     
                     btn_cols = st.columns(2)
-                    btn_cols[0].button("Editar", key=f"edit_{i}", use_container_width=True)
-                    btn_cols[1].button("Desativar", key=f"del_{i}", use_container_width=True)
+                    btn_cols[0].button("Editar", key=f"edit_{i}", width='stretch')
+                    btn_cols[1].button("Desativar", key=f"del_{i}", width='stretch')
 
     elif selected_tab == 'Modalidades':
         header_cols = st.columns([3, 1])
         with header_cols[0]:
             st.subheader("Modalidades de Atendimento")
         with header_cols[1]:
-            st.button("✚ Adicionar Modalidade", type="primary", use_container_width=True)
+            st.button("✚ Adicionar Modalidade", type="primary", width='stretch')
 
         modalities = [
             {"name": "Fisioterapia", "desc": "Tratamento de reabilitação física"},
@@ -579,8 +579,8 @@ def management_page():
                     st.write("") # Espaçador
                     
                     btn_cols = st.columns(2)
-                    btn_cols[0].button("Editar", key=f"edit_mod_{i}", use_container_width=True)
-                    btn_cols[1].button("🗑️", key=f"del_mod_{i}", use_container_width=True)
+                    btn_cols[0].button("Editar", key=f"edit_mod_{i}", width='stretch')
+                    btn_cols[1].button("🗑️", key=f"del_mod_{i}", width='stretch')
 
     elif selected_tab == 'Agendas':
         st.subheader("Configuração de Agendas")
@@ -607,7 +607,7 @@ def management_page():
                     st.markdown(f"##### 🧑‍⚕️ {agenda['name']}")
                     st.caption(agenda['specialty'])
                 with header_cols[1]:
-                    st.button("Editar", key=f"edit_agenda_{i}", use_container_width=True, type="primary")
+                    st.button("Editar", key=f"edit_agenda_{i}", width='stretch', type="primary")
                 
                 st.write("") # Espaçador
 
@@ -615,7 +615,7 @@ def management_page():
                     day_cols = st.columns([2, 2, 1])
                     day_cols[0].text(day)
                     day_cols[1].text(time)
-                    day_cols[2].button(f"Cap: {cap}", key=f"cap_{i}_{day}", disabled=True, use_container_width=True)
+                    day_cols[2].button(f"Cap: {cap}", key=f"cap_{i}_{day}", disabled=True, width='stretch')
             st.write("") # Espaço entre os cards
 
 # --- PÁGINA DE CONFIRMAÇÃO DE AGENDAMENTOS ---
@@ -648,7 +648,7 @@ def confirmation_page():
                     </div>
                     """, unsafe_allow_html=True)
 
-        if st.button("Fechar", use_container_width=True, key="close_preview"):
+        if st.button("Fechar", width='stretch', key="close_preview"):
             st.session_state.show_preview_dialog = False
             st.rerun()
 
@@ -729,11 +729,11 @@ def confirmation_page():
 
             selected_count = int(st.session_state.edited_df['Selecionar'].sum())
             btn_cols = st.columns(2)
-            if btn_cols[0].button("Visualizar Preview", use_container_width=True):
+            if btn_cols[0].button("Visualizar Preview", width='stretch'):
                 st.session_state.show_preview_dialog = True
                 st.rerun()
             
-            btn_cols[1].button(f"✉️ Enviar Mensagens ({selected_count})", use_container_width=True, type="primary")
+            btn_cols[1].button(f"✉️ Enviar Mensagens ({selected_count})", width='stretch', type="primary")
 
     # --- TABELA DE AGENDAMENTOS ---
     st.write("---")
@@ -748,7 +748,7 @@ def confirmation_page():
 
     edited_df = st.data_editor(
         st.session_state.edited_df,
-        use_container_width=True,
+        width='stretch',
         hide_index=True,
         disabled=['Paciente', 'Horário', 'Modalidade', 'Profissional', 'Status', 'Telefone'],
         key='appointments_editor'
@@ -769,11 +769,11 @@ def patients_page():
     with header_cols[0]:
         st.subheader("Cadastro de Pacientes")
     with header_cols[1]:
-        st.button("✚ Novo Paciente", type="primary", use_container_width=True)
+        st.button("✚ Novo Paciente", type="primary", width='stretch')
 
     filter_cols = st.columns([3, 1])
     filter_cols[0].text_input("Buscar por nome, telefone ou email...", placeholder="🔍 Buscar por nome, telefone ou email...", label_visibility="collapsed")
-    filter_cols[1].button("Filtros", use_container_width=True)
+    filter_cols[1].button("Filtros", width='stretch')
 
     # Dados de exemplo para a tabela de pacientes
     data = {
@@ -786,7 +786,7 @@ def patients_page():
     }
     df_patients = pd.DataFrame(data)
 
-    st.dataframe(df_patients, use_container_width=True, hide_index=True)
+    st.dataframe(df_patients, width='stretch', hide_index=True)
     st.caption("Ações como editar e excluir podem ser adicionadas ao selecionar uma linha ou através de um menu de contexto em futuras implementações.")
 
 # --- PÁGINA DE RELATÓRIOS ---
