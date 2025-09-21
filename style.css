@@ -174,12 +174,12 @@ div[data-testid="stProgressBar"] > div {
 .patient-phone { font-size: 17px; color: #5a5a5a; }
 .patient-phone .bi { margin-right: 5px; }
 .specialty-tag {
-    background-color: #eefff2;
-    color: #0b9035;
-    padding: 4px 12px;
+    background-color: #28a745; /* Fundo verde forte (consistente com os botões) */
+    color: #FFFFFF;           /* Cor da fonte branca para alto contraste */
+    padding: 6px 14px;         /* Aumenta um pouco o espaçamento interno */
     border-radius: 15px;
-    font-size: 12px;
-    font-weight: 500;
+    font-size: 14px;           /* Tamanho da fonte aumentado */
+    font-weight: 600;          /* Fonte um pouco mais grossa para melhor leitura */
 }
 .details-grid {
     display: grid;

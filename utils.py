@@ -5,6 +5,12 @@ from datetime import date, timedelta
 import pandas as pd
 from dateutil.relativedelta import relativedelta
 import numpy as np
+from supabase import create_client, Client
+from dotenv import load_dotenv
+import os
+import time
+from datetime import datetime
+import requests
 
 # --- FUNÇÃO DE LOGIN CENTRALIZADA E ESTILIZADA ---
 def login_form(logo_path): # MODIFICAÇÃO: Adicionado o parâmetro 'logo_path'
@@ -113,62 +119,80 @@ def get_sample_appointments():
         return f"{dia_semana}, {d.day} de {meses[d.month]} de {d.year}"
 
     return [
-        # --- Exemplos conectados da 'Agenda do Dia' ---
-        {
-            "name": "Ricardo Gomes Alves", "initials": "RG", "phone": "(81) 99876-5432", 
-            "specialty": "Ortopedia", "date": format_date(today), "time": "09:00", 
-            "professional": "Dr. Carlos Mendes", "insurance": "Amil", 
-            "card_number": "1 234 567890 12-3", "event": "Primeira Consulta", 
-            "notes": "Paciente encaminhado com suspeita de lesão no menisco. Trazer exames anteriores."
-        },
+        # --- 3 Exemplos para a aba "Carteirinha" ---
         {
             "name": "Letícia Barros de Souza", "initials": "LB", "phone": "(31) 98765-4321", 
             "specialty": "Cardiologia", "date": format_date(today + timedelta(days=3)), "time": "14:30", 
             "professional": "Dr. Lucas Martins", "insurance": "SulAmérica", 
             "card_number": "2 345 678901 23-4", "event": "Check-up Anual", 
-            "notes": "Paciente solicitou reagendamento da semana passada. Verificar histórico de pressão arterial."
-        },
-        {
-            "name": "Patrícia Moreira Lima", "initials": "PM", "phone": "(21) 97654-3210", 
-            "specialty": "Ortopedia", "date": format_date(today + timedelta(days=8)), "time": "11:00", 
-            "professional": "Dr. Carlos Mendes", "insurance": "Bradesco Saúde", 
-            "card_number": "3 456 789012 34-5", "event": "Retorno", 
-            "notes": "Retorno para avaliação de fisioterapia pós-fratura no tornozelo."
+            "notes": "Paciente solicitou reagendamento da semana passada. Verificar histórico de pressão arterial.",
+            "type": "Carteirinha"
         },
         {
             "name": "Pedro Lima Santos", "initials": "PL", "phone": "(11) 96543-2109", 
             "specialty": "Nutrição", "date": format_date(today - timedelta(days=22)), "time": "16:00", 
             "professional": "Dr. Roberto Lima", "insurance": "NotreDame Intermédica", 
             "card_number": "4 567 890123 45-6", "event": "Consulta de Acompanhamento", 
-            "notes": "Paciente em processo de reeducação alimentar. Apresentar diário alimentar."
-        },
-        
-        # --- Novos exemplos para enriquecer a fila ---
-        {
-            "name": "Vanessa Ribeiro Costa", "initials": "VR", "phone": "(48) 99123-4567", 
-            "specialty": "Psicologia", "date": format_date(today + timedelta(days=1)), "time": "10:30", 
-            "professional": "Dra. Sofia Almeida", "insurance": "Particular", 
-            "card_number": "N/A", "event": "Sessão de Terapia", 
-            "notes": "Primeira sessão. Foco em ansiedade e estresse no trabalho."
+            "notes": "Paciente em processo de reeducação alimentar. Apresentar diário alimentar.",
+            "type": "Carteirinha"
         },
         {
             "name": "Marcos Aurélio Bastos", "initials": "MA", "phone": "(61) 98234-5678", 
             "specialty": "Fisioterapia", "date": format_date(today + timedelta(days=2)), "time": "08:00", 
             "professional": "Dra. Ana Costa", "insurance": "Unimed", 
             "card_number": "5 678 901234 56-7", "event": "Sessão de Reabilitação", 
-            "notes": "Paciente em reabilitação de cirurgia no ombro. 5ª sessão de 10."
+            "notes": "Paciente em reabilitação de cirurgia no ombro. 5ª sessão de 10.",
+            "type": "Carteirinha"
+        },
+
+        # --- 4 Exemplos para a aba "Agendamento" ---
+        {
+            "name": "Ricardo Gomes Alves", "initials": "RG", "phone": "(81) 99876-5432", 
+            "specialty": "Ortopedia", "date": format_date(today), "time": "09:00", 
+            "professional": "Dr. Carlos Mendes", "insurance": "Amil", 
+            "card_number": "1 234 567890 12-3", "event": "Primeira Consulta", 
+            "notes": "Paciente encaminhado com suspeita de lesão no menisco. Trazer exames anteriores.",
+            "type": "Agendamento"
+        },
+        {
+            "name": "Patrícia Moreira Lima", "initials": "PM", "phone": "(21) 97654-3210", 
+            "specialty": "Ortopedia", "date": format_date(today + timedelta(days=8)), "time": "11:00", 
+            "professional": "Dr. Carlos Mendes", "insurance": "Bradesco Saúde", 
+            "card_number": "3 456 789012 34-5", "event": "Retorno", 
+            "notes": "Retorno para avaliação de fisioterapia pós-fratura no tornozelo.",
+            "type": "Agendamento"
+        },
+        {
+            "name": "Vanessa Ribeiro Costa", "initials": "VR", "phone": "(48) 99123-4567", 
+            "specialty": "Psicologia", "date": format_date(today + timedelta(days=1)), "time": "10:30", 
+            "professional": "Dra. Sofia Almeida", "insurance": "Particular", 
+            "card_number": "N/A", "event": "Sessão de Terapia", 
+            "notes": "Primeira sessão. Foco em ansiedade e estresse no trabalho.",
+            "type": "Agendamento"
         },
         {
             "name": "Cláudia Ohana Dias", "initials": "CO", "phone": "(71) 99988-7766", 
             "specialty": "Cardiologia", "date": format_date(today + timedelta(days=5)), "time": "15:00", 
             "professional": "Dr. Lucas Martins", "insurance": "CASSI", 
             "card_number": "6 789 012345 67-8", "event": "Exame (MAPA)", 
-            "notes": "Paciente precisa de instruções pré-exame. Entrar em contato para confirmar o recebimento das orientações."
+            "notes": "Paciente precisa de instruções pré-exame. Entrar em contato para confirmar o recebimento das orientações.",
+            "type": "Agendamento"
         }
     ]
 
-# --- Função para exibir a mensagem de conclusão ---
-def display_completion_message():
+# --- [NOVO] Função para exibir a mensagem de conclusão da CARTEIRINHA ---
+def display_carteirinha_completion_message():
+    """Exibe a mensagem de conclusão específica para a fila de Carteirinha."""
+    st.markdown("""
+    <div class="completion-container">
+        <div class="completion-icon">✓</div>
+        <h2 class="completion-title">Parabéns!</h2>
+        <p class="completion-subtitle">Você completou todas as confirmações pendentes referente a carteirinha.</p>
+    </div>
+    """, unsafe_allow_html=True)
+
+# --- [MODIFICADO] Função para exibir a mensagem de conclusão do AGENDAMENTO (com botão de reset) ---
+def display_agendamento_completion_message():
     """Exibe a mensagem de conclusão quando todos os agendamentos são processados."""
     st.markdown("""
     <div class="completion-container">
@@ -181,162 +205,16 @@ def display_completion_message():
     # Centraliza o botão usando colunas
     _, col2, _ = st.columns([1, 1.2, 1])
     with col2:
-        if st.button("Reiniciar a Fila de Aprovação", width='stretch', key="reset_queue"):
-            st.session_state.current_appointment_index = 0
+        if st.button("Reiniciar Todas as Filas", width='stretch', key="reset_queues"):
+            # Reinicializa todas as variáveis de estado das filas
+            all_apps = get_sample_appointments()
+            st.session_state.carteirinha_appointments = [app for app in all_apps if app.get('type') == 'Carteirinha']
+            st.session_state.agendamento_appointments = [app for app in all_apps if app.get('type') == 'Agendamento']
+            st.session_state.carteirinha_pending = len(st.session_state.carteirinha_appointments)
+            st.session_state.agendamento_pending = len(st.session_state.agendamento_appointments)
+            st.session_state.carteirinha_index = 0
+            st.session_state.agendamento_index = 0
             st.rerun()
-
-# --- PÁGINA DE FILA DE APROVAÇÃO ---
-def confirmation_queue_page():
-    """Exibe a fila de aprovação usando st.dialog para os diálogos."""
-        # --- [LINHA ADICIONADA] ---
-    # Este CSS específico para a página move o container para cima, sobrescrevendo o estilo global.
-    st.markdown('<style>div.block-container {padding-top: 1.5rem;}</style>', unsafe_allow_html=True)
-    st.markdown('<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">', unsafe_allow_html=True)
-
-    # --- Estado inicial ---
-    if 'appointments' not in st.session_state:
-        st.session_state.appointments = get_sample_appointments()
-    if 'current_appointment_index' not in st.session_state:
-        st.session_state.current_appointment_index = 0
-    
-    if 'show_approve_dialog' not in st.session_state:
-        st.session_state.show_approve_dialog = False
-    if 'show_cancel_dialog' not in st.session_state:
-        st.session_state.show_cancel_dialog = False
-    if 'show_reschedule_dialog' not in st.session_state:
-        st.session_state.show_reschedule_dialog = False
-
-    appointments = st.session_state.appointments
-    current_index = st.session_state.current_appointment_index
-    total_appointments = len(appointments)
-
-    def go_to_next():
-        st.session_state.current_appointment_index += 1
-        st.session_state.show_approve_dialog = False
-        st.session_state.show_cancel_dialog = False
-        st.session_state.show_reschedule_dialog = False
-
-    if current_index >= total_appointments:
-        display_completion_message()
-        return
-
-    current_appointment = appointments[current_index]
-
-    # Barra de progresso
-    st.write("Progresso")
-    st.progress((current_index + 1) / total_appointments)
-    st.markdown(f"<p class='progress-label'>{current_index + 1} de {total_appointments}</p>", unsafe_allow_html=True)
-
-    # Card de aprovação normal
-    approval_card_html = f"""
-    <div class="approval-card">
-        <div class="approval-header">
-            <div class="patient-info">
-                <div class="patient-avatar">{current_appointment['initials']}</div>
-                <div>
-                    <div class="patient-name">{current_appointment['name']}</div>
-                    <div class="patient-phone"><i class="bi bi-telephone-fill"></i> {current_appointment['phone']}</div>
-                </div>
-            </div>
-            <div class="specialty-tag">{current_appointment['specialty']}</div>
-        </div>
-        <div class="details-grid">
-            <div class="detail-item"><i class="bi bi-calendar-event"></i><div><div class="detail-label">Data</div><div class="detail-value">{current_appointment['date']}</div></div></div>
-            <div class="detail-item"><i class="bi bi-person"></i><div><div class="detail-label">Profissional</div><div class="detail-value">{current_appointment['professional']}</div></div></div>
-            <div class="detail-item"><i class="bi bi-clock"></i><div><div class="detail-label">Horário</div><div class="detail-value">{current_appointment['time']}</div></div></div>
-            <div class="detail-item"><i class="bi bi-hospital"></i><div><div class="detail-label">Convênio</div><div class="detail-value">{current_appointment['insurance']}</div></div></div>
-            <div class="detail-item"><i class="bi bi-credit-card-2-front"></i><div><div class="detail-label">Carteirinha</div><div class="detail-value">{current_appointment['card_number']}</div></div></div>
-            <div class="detail-item"><i class="bi bi-tag"></i><div><div class="detail-label">Evento</div><div class="detail-value">{current_appointment['event']}</div></div></div>
-        </div>
-        <div class="observations-section">
-            <div class="detail-label">Observações</div>
-            <div class="detail-value">{current_appointment['notes']}</div>
-        </div>
-    </div>
-    """
-    st.markdown(approval_card_html, unsafe_allow_html=True)
-
-    # Botões de ação principais
-    st.markdown('<div class="action-buttons-container">', unsafe_allow_html=True)
-    cols = st.columns(3)
-    if cols[0].button("✓ Aprovar", width='stretch'):
-        st.session_state.show_approve_dialog = True
-        st.rerun()
-    if cols[1].button("↻ Reagendar", width='stretch'):
-        st.session_state.show_reschedule_dialog = True
-        st.rerun()
-    if cols[2].button("✕ Cancelar", width='stretch'):
-        st.session_state.show_cancel_dialog = True
-        st.rerun()
-    st.markdown('</div>', unsafe_allow_html=True)
-
-    # --- Diálogos via st.dialog ---
-
-    # Diálogo de Aprovação
-    @st.dialog("Confirmar Aprovação")
-    def approve_dialog():
-        st.write(f"Tem certeza que deseja aprovar o agendamento de **{current_appointment['name']}**?")
-        if st.button("Sim, Aprovar", width='stretch'):
-            st.toast(f"{current_appointment['name']} aprovado(a)!", icon="✅")
-            go_to_next()
-            st.rerun()
-        if st.button("Voltar", width='stretch'):
-            st.session_state.show_approve_dialog = False
-            st.rerun()
-
-    if st.session_state.show_approve_dialog:
-        approve_dialog()
-
-    # Diálogo de Cancelamento
-    @st.dialog("Confirmar Cancelamento")
-    def cancel_dialog():
-        st.warning(f"Tem certeza que deseja cancelar o agendamento de **{current_appointment['name']}**?")
-
-        motivo = st.selectbox(
-            "Selecione o motivo do cancelamento:",
-            [
-                "Convênio não aprovado",
-                "Paciente desistiu",
-                "Profissional indisponível",
-                "Erro no agendamento",
-                "Outro motivo"
-            ]
-        )
-
-        if st.button("Sim, Cancelar", width='stretch'):
-            st.toast(
-                f"{current_appointment['name']} cancelado(a). Motivo: {motivo}",
-                icon="🗑️"
-            )
-            go_to_next()
-            st.rerun()
-
-        if st.button("Voltar", width='stretch'):
-            st.session_state.show_cancel_dialog = False
-            st.rerun()
-
-
-    if st.session_state.show_cancel_dialog:
-        cancel_dialog()
-
-    # Diálogo de Reagendamento
-    @st.dialog("Reagendar Consulta")
-    def reschedule_dialog():
-        st.markdown(f"**Paciente:** {current_appointment['name']}")
-        st.markdown(f"**Agendamento atual:** {current_appointment['date'].split(', ')[1]} às {current_appointment['time']}")
-        new_date = st.date_input("Nova Data")
-        new_time = st.time_input("Novo Horário", step=1800)
-        st.text_area("Mensagem para o Paciente (Opcional)")
-        if st.button("Enviar Sugestão", width='stretch'):
-            st.toast("Sugestão de reagendamento enviada!", icon="👍")
-            go_to_next()
-            st.rerun()
-        if st.button("Cancelar", width='stretch'):
-            st.session_state.show_reschedule_dialog = False
-            st.rerun()
-
-    if st.session_state.show_reschedule_dialog:
-        reschedule_dialog()
 
 # --- DADOS E FUNÇÕES PARA A PÁGINA DE AGENDA DO DIA ---
 def get_daily_agenda_for_dataframe():
@@ -413,49 +291,79 @@ def clear_filters_callback():
 
 # --- PÁGINAS ---
 # --- PÁGINA DA AGENDA DO DIA ---
+# --- FUNÇÃO DEDICADA PARA BUSCAR METADADOS DO BANCO DE DADOS ---
+def fetch_metadata_from_db(supabase_client):
+    """
+    Busca os metadados dos PDFs da tabela 'pdf_metadata' e retorna um DataFrame.
+    """
+    try:
+        # --- [INÍCIO DA CORREÇÃO] ---
+        # Sendo explícito sobre quais colunas selecionar para garantir que 'id' esteja presente.
+        response = supabase_client.table('pdf_metadata').select(
+            'id, created_at, data_upload, nome_arquivo, info_extraida'
+        ).order('created_at', desc=True).execute()
+        # --- [FIM DA CORREÇÃO] ---
+        
+        # A API retorna os dados dentro de uma chave 'data'
+        data = response.data
+        if not data:
+            return pd.DataFrame()
+        
+        # Converte a lista de dicionários em um DataFrame do Pandas
+        df = pd.DataFrame(data)
+        # Renomeia as colunas para corresponder ao que o resto do app espera
+        df = df.rename(columns={'data_upload': 'upload_date', 'nome_arquivo': 'file_name', 'info_extraida': 'extracted'})
+        return df
+
+    except Exception as e:
+        st.error(f"Não foi possível buscar os metadados do banco de dados: {e}")
+        return pd.DataFrame()
+
 def daily_schedule_page():
-    """Exibe a agenda do dia com filtros interativos e o novo design na tabela."""
-    st.subheader("Filtros")
+    """Exibe a agenda do dia com filtros e funcionalidade de upload para o Supabase."""
     
-    # --- INICIALIZAÇÃO DO SESSION STATE ---
+    # Conexão com o Supabase
+    load_dotenv()
+    try:
+        supabase_url = os.getenv("SUPABASE_URL")
+        supabase_key = os.getenv("SUPABASE_KEY")
+        if not supabase_url or not supabase_key:
+            st.error("As credenciais do Supabase não foram encontradas.")
+            st.stop()
+        supabase: Client = create_client(supabase_url, supabase_key)
+    except Exception as e:
+        st.error(f"Ocorreu um erro ao inicializar a conexão com o Supabase: {e}")
+        st.stop()
+
+    # --- GERENCIAMENTO DO DATAFRAME DE ARQUIVOS A PARTIR DO DB ---
+    if 'files_df' not in st.session_state:
+        with st.spinner("Buscando metadados dos arquivos..."):
+            st.session_state.files_df = fetch_metadata_from_db(supabase)
+
+    # --- SEÇÃO DE FILTROS E TABELA DE AGENDAMENTOS (CÓDIGO EXISTENTE) ---
+    st.subheader("Filtros")
     if "view_mode" not in st.session_state:
-        # [MODIFICADO] O padrão agora é 'Semana' e a data de hoje.
         st.session_state.view_mode = "Semana"
         st.session_state.selected_date = date.today()
         st.session_state.prof_filter = "Todos"
         st.session_state.cat_filter = "Todos"
         st.session_state.status_filter = "Todos"
         st.session_state.search_term = ""
-
     df = pd.DataFrame(get_daily_agenda_for_dataframe())
     df['scheduled_date'] = pd.to_datetime(df['scheduled_date']).dt.date
-
-    # --- BARRA DE FILTROS COMPLETA ---
     with st.container(border=False):
         col1, col2 = st.columns([3, 2])
-        # [MODIFICADO] O 'index' do radio foi ajustado para corresponder ao novo padrão 'Semana'
-        col1.radio(
-            "Visualização:", 
-            ["Dia", "Semana", "Mês", "Trimestre", "Todo o período"], 
-            horizontal=True, 
-            key="view_mode",
-            index=1 # Define "Semana" como o item selecionado por padrão
-        )
+        col1.radio("Visualização:", ["Dia", "Semana", "Mês", "Trimestre", "Todo o período"], horizontal=True, key="view_mode", index=1)
         col2.date_input("Data:", key="selected_date", disabled=(st.session_state.view_mode == "Todo o período"))
-
         f_col1, f_col2, f_col3, f_col4 = st.columns(4)
         f_col1.selectbox("Todos os profissionais", ["Todos"] + sorted(df['professional'].unique().tolist()), key="prof_filter")
         f_col2.selectbox("Todas as categorias", ["Todos"] + sorted(df['category'].unique().tolist()), key="cat_filter")
         f_col3.selectbox("Todos os status", ["Todos"] + sorted(df['status'].unique().tolist()), key="status_filter")
         f_col4.selectbox("Todos os pacientes", ["Todos"], key="patient_filter", disabled=True)
-
         search_col, btn_col = st.columns([4, 1.08])
         search_col.text_input("Buscar paciente...", placeholder="Buscar paciente...", label_visibility="collapsed", key="search_term")
         btn_col.button("Limpar Filtros", width='stretch', on_click=clear_filters_callback)
-
-    # --- LÓGICA DE FILTRAGEM ---
     start_date, end_date = get_date_range(st.session_state.selected_date, st.session_state.view_mode)
-    
     filtered_df = df
     if st.session_state.view_mode != "Todo o período":
         filtered_df = df[(df['scheduled_date'] >= start_date) & (df['scheduled_date'] <= end_date)]
@@ -467,49 +375,157 @@ def daily_schedule_page():
         filtered_df = filtered_df[filtered_df['status'] == st.session_state.status_filter]
     if st.session_state.search_term:
         filtered_df = filtered_df[filtered_df['name'].str.contains(st.session_state.search_term, case=False, na=False)]
-
-    # --- CABEÇALHO DINÂMICO E BOTÃO DE UPLOAD ---
     if st.session_state.view_mode == "Dia":
         st.header(f"Agendamentos para {st.session_state.selected_date.strftime('%d/%m/%Y')}")
     elif st.session_state.view_mode == "Todo o período":
         st.header("Exibindo todos os agendamentos")
     else:
         st.header(f"Agendamentos de {start_date.strftime('%d/%m/%Y')} até {end_date.strftime('%d/%m/%Y')}")
-
-    # --- CONTADORES DINÂMICOS ---
     total_agendamentos = len(filtered_df[filtered_df['status'] != 'Cancelado'])
     confirmados = len(filtered_df[filtered_df['status'] == 'Confirmado'])
     pendentes = len(filtered_df[~filtered_df['status'].isin(['Confirmado', 'Cancelado'])])
-
-    st.markdown(f"""
-    <div style="display: flex; align-items: center; gap: 20px; font-size: 1.1rem; margin-bottom: 15px;">
-        <span><i class="bi bi-people-fill"></i> <b>{total_agendamentos}</b> agendamentos</span>
-        <span style="color: #28a745;"><b>{confirmados}</b> confirmadas</span>
-        <span style="color: #ffc107;"><b>{pendentes}</b> pendentes</span>
-    </div>
-    """, unsafe_allow_html=True)
-
-    # --- Tabela de Agendamentos ---
+    st.markdown(f"""<div style="display: flex; align-items: center; gap: 20px; font-size: 1.1rem; margin-bottom: 15px;"><span><i class="bi bi-people-fill"></i> <b>{total_agendamentos}</b> agendamentos</span><span style="color: #28a745;"><b>{confirmados}</b> confirmadas</span><span style="color: #ffc107;"><b>{pendentes}</b> pendentes</span></div>""", unsafe_allow_html=True)
     st.markdown('<div class="agenda-table-container">', unsafe_allow_html=True)
-    st.dataframe(
-        filtered_df.rename(columns={
-            'name': 'Paciente',
-            'scheduled_date': 'Data Agendada',
-            'professional': 'Profissional',
-            'category': 'Categoria',
-            'status': 'Status'
-        }),
-        width='stretch',
-        hide_index=True
-    )
+    st.dataframe(filtered_df.rename(columns={'name': 'Paciente','scheduled_date': 'Data Agendada','professional': 'Profissional','category': 'Categoria','status': 'Status'}), width='stretch', hide_index=True)
     st.markdown('</div>', unsafe_allow_html=True)
-
-    st.file_uploader(
-        "📄 Carregar agendamentos PDF",
+    
+    # --- LÓGICA DE UPLOAD PARA O SUPABASE (STORAGE + DATABASE) ---
+    uploaded_files = st.file_uploader(
+        "Arraste e solte os arquivos aqui",
         type="pdf",
-        accept_multiple_files=True,
-        label_visibility="collapsed"
+        accept_multiple_files=True
     )
+
+    if uploaded_files:
+        for uploaded_file in uploaded_files:
+            file_name_with_date = f"{date.today().strftime('%Y-%m-%d')}_{uploaded_file.name}"
+            file_path_in_bucket = f"pdfs-agendamento/{file_name_with_date}"
+            
+            try:
+                # 1. Envia para o Storage
+                with st.spinner(f'Enviando "{uploaded_file.name}" para o Storage...'):
+                    supabase.storage.from_("cofrat").upload(
+                        path=file_path_in_bucket,
+                        file=uploaded_file.getvalue(),
+                        file_options={"content-type": "application/pdf"}
+                    )
+                
+                # 2. Insere o metadado no Banco de Dados
+                with st.spinner(f'Registrando "{uploaded_file.name}" no banco de dados...'):
+                    supabase.table('pdf_metadata').insert({
+                        'data_upload': date.today().isoformat(),
+                        'nome_arquivo': file_name_with_date
+                        # 'info_extraida' usará o valor padrão "Não" definido na tabela
+                    }).execute()
+
+                st.success(f'✅ Arquivo "{uploaded_file.name}" processado com sucesso!')
+
+            except Exception as e:
+                if "Duplicate" in str(e):
+                     st.warning(f'⚠️ O arquivo "{uploaded_file.name}" já existe no storage ou no banco de dados.')
+                else:
+                    st.error(f'❌ Ocorreu um erro no processo de upload: {e}')
+        
+        # Após o upload, força a atualização da lista a partir do DB
+        with st.spinner("Atualizando lista de arquivos..."):
+            st.session_state.files_df = fetch_metadata_from_db(supabase)
+        st.rerun()
+
+    # --- LISTA DE STATUS DE UPLOAD (LENDO DO DATAFRAME DO DB) ---
+    st.write("---")
+    
+    col_header1, col_header2 = st.columns([3, 1])
+    with col_header1:
+        st.subheader("Status da Extração de Arquivos")
+    with col_header2:
+        if st.button("🔄 Atualizar Lista", use_container_width=True):
+            with st.spinner("Buscando metadados dos arquivos..."):
+                st.session_state.files_df = fetch_metadata_from_db(supabase)
+            st.rerun()
+
+    files_df = st.session_state.files_df
+    if files_df.empty:
+        st.info("Nenhum metadado de arquivo encontrado no banco de dados.")
+    else:
+        header_cols = st.columns([2, 4, 2, 3]) # Ajustado para 4 colunas de botões
+        header_cols[0].markdown("**Data de upload**")
+        header_cols[1].markdown("**Nome do arquivo**")
+        header_cols[2].markdown("**Info Extraída**")
+        st.markdown("---")
+
+        for index, row in files_df.iterrows():
+            col1, col2, col3, col4 = st.columns([2, 4, 2, 3])
+            
+            col1.write(datetime.strptime(row['upload_date'], '%Y-%m-%d').strftime('%d/%m/%Y'))
+            col2.write(row['file_name'])
+            
+            if row['extracted'] == 'Sim':
+                col3.markdown("<span style='color: green;'>Sim</span>", unsafe_allow_html=True)
+            else:
+                col3.markdown("<span style='color: orange;'>Não</span>", unsafe_allow_html=True)
+            
+            # Coluna de botões
+            with col4:
+                btn_cols = st.columns(2)
+                # Botão de Extrair
+                if row['extracted'] != 'Sim':
+                    if btn_cols[0].button("Extrair", key=f"extract_{row['id']}", use_container_width=True):
+                        WEBHOOK_URL = "https://webhook.erudieto.com.br/webhook/cofrat-pdf"
+                        payload = {'fileName': row['file_name']} # Enviando o nome do arquivo para o n8n
+                        
+                        with st.spinner(f"Acionando automação para '{row['file_name']}'..."):
+                            try:
+                                response = requests.post(WEBHOOK_URL, json=payload, timeout=300)
+                                if response.status_code == 200 and response.json().get('info_extraida') == 'Sim':
+                                    # ATUALIZA O BANCO DE DADOS
+                                    supabase.table('pdf_metadata').update({'info_extraida': 'Sim'}).eq('id', row['id']).execute()
+                                    st.success(f"Extração concluída para '{row['file_name']}'!")
+                                    # Recarrega os dados do DB
+                                    st.session_state.files_df = fetch_metadata_from_db(supabase)
+                                    st.rerun()
+                                else:
+                                    st.error(f"Falha na resposta do webhook: {response.text}")
+                            except requests.exceptions.RequestException as e:
+                                st.error(f"Erro de conexão com o webhook: {e}")
+                
+                # Botão de Deletar
+                if btn_cols[1].button("🗑️", key=f"delete_{row['id']}", help=f"Deletar {row['file_name']}", use_container_width=True):
+                    st.session_state.file_to_delete = row
+                    st.rerun()
+
+    # --- DIÁLOGO DE CONFIRMAÇÃO DE DELEÇÃO ---
+    if 'file_to_delete' in st.session_state and st.session_state.file_to_delete is not None:
+        file_info = st.session_state.file_to_delete
+        
+        @st.dialog("Confirmar Deleção")
+        def confirm_delete():
+            st.warning(f"Você tem certeza que deseja deletar permanentemente o arquivo **{file_info['file_name']}**?")
+            st.write("Esta ação removerá o arquivo do armazenamento e seu registro do banco de dados. Não pode ser desfeita.")
+            
+            if st.button("Sim, deletar agora", type="primary"):
+                try:
+                    # 1. Deleta do Storage
+                    supabase.storage.from_("cofrat").remove([f"pdfs-agendamento/{file_info['file_name']}"])
+                    # 2. Deleta do Banco de Dados
+                    supabase.table('pdf_metadata').delete().eq('id', file_info['id']).execute()
+                    
+                    st.success("Arquivo deletado com sucesso!")
+                    # Limpa o estado e recarrega os dados
+                    st.session_state.file_to_delete = None
+                    st.session_state.files_df = fetch_metadata_from_db(supabase)
+                    st.rerun()
+
+                except Exception as e:
+                    st.error(f"Erro ao deletar o arquivo: {e}")
+                    st.session_state.file_to_delete = None
+                    st.rerun()
+
+            if st.button("Cancelar"):
+                st.session_state.file_to_delete = None
+                st.rerun()
+        
+        confirm_delete()
+    
 
 # --- PÁGINA DE GESTÃO ---
 def management_page():
@@ -617,6 +633,276 @@ def management_page():
                     day_cols[1].text(time)
                     day_cols[2].button(f"Cap: {cap}", key=f"cap_{i}_{day}", disabled=True, width='stretch')
             st.write("") # Espaço entre os cards
+
+# --- [TOTALMENTE REFEITA] PÁGINA DE CONFIRMAÇÃO DE AGENDAMENTOS ---
+def confirmation_queue_page():
+    """Exibe as filas de aprovação de forma independente para Carteirinha e Agendamento."""
+    st.markdown('<style>div.block-container {padding-top: 1.5rem;}</style>', unsafe_allow_html=True)
+    st.markdown('<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">', unsafe_allow_html=True)
+
+    # --- Bloco de inicialização robusto para as filas separadas ---
+    if 'carteirinha_appointments' not in st.session_state:
+        all_apps = get_sample_appointments()
+        st.session_state.carteirinha_appointments = [app for app in all_apps if app.get('type') == 'Carteirinha']
+        st.session_state.agendamento_appointments = [app for app in all_apps if app.get('type') == 'Agendamento']
+        st.session_state.carteirinha_pending = len(st.session_state.carteirinha_appointments)
+        st.session_state.agendamento_pending = len(st.session_state.agendamento_appointments)
+        st.session_state.carteirinha_index = 0
+        st.session_state.agendamento_index = 0
+
+    if 'approval_view' not in st.session_state:
+        st.session_state.approval_view = 'Carteirinha'
+    if 'show_approve_dialog' not in st.session_state:
+        st.session_state.show_approve_dialog = False
+    if 'show_approve_carteirinha_dialog' not in st.session_state:
+        st.session_state.show_approve_carteirinha_dialog = False
+    if 'show_cancel_dialog' not in st.session_state:
+        st.session_state.show_cancel_dialog = False
+    if 'show_reschedule_dialog' not in st.session_state:
+        st.session_state.show_reschedule_dialog = False
+
+    # --- Função para avançar para o próximo item na fila ATIVA ---
+    def go_to_next():
+        active_queue = st.session_state.approval_view
+        if active_queue == 'Carteirinha' and st.session_state.carteirinha_index < len(st.session_state.carteirinha_appointments):
+            st.session_state.carteirinha_pending -= 1
+            st.session_state.carteirinha_index += 1
+        elif active_queue == 'Agendamento' and st.session_state.agendamento_index < len(st.session_state.agendamento_appointments):
+            st.session_state.agendamento_pending -= 1
+            st.session_state.agendamento_index += 1
+        
+        # Fecha todos os diálogos
+        st.session_state.show_approve_dialog = False
+        st.session_state.show_approve_carteirinha_dialog = False
+        st.session_state.show_cancel_dialog = False
+        st.session_state.show_reschedule_dialog = False
+
+    # --- [INÍCIO DA CORREÇÃO] ---
+    # Determina o índice da aba que deve ser exibida com base no session_state
+    # Isso garante que a aba correta permaneça selecionada após um st.rerun()
+    tab_options = ['Carteirinha', 'Agendamento']
+    try:
+        active_tab_index = tab_options.index(st.session_state.approval_view)
+    except ValueError:
+        active_tab_index = 0 # Padrão para a primeira aba se o estado for inválido
+    # --- [FIM DA CORREÇÃO] ---
+
+    # Abas para alternar a visualização
+    selected_view_label = sac.segmented(
+        items=[
+            sac.SegmentedItem(label=f"Carteirinha ({st.session_state.carteirinha_pending})"),
+            sac.SegmentedItem(label=f"Agendamento ({st.session_state.agendamento_pending})"),
+        ],
+        index=active_tab_index,  # <-- [CORREÇÃO APLICADA AQUI] Usa o índice calculado
+        return_index=False,
+        align='left',
+        size='sm',
+        color='#28a745'
+    )
+    # Atualiza o estado da sessão caso o usuário clique em uma nova aba
+    st.session_state.approval_view = selected_view_label.split(' ')[0]
+
+    # --- Lógica de Exibição para a Fila de CARTEIRINHA ---
+    if st.session_state.approval_view == 'Carteirinha':
+        carteirinha_index = st.session_state.carteirinha_index
+        carteirinha_appointments = st.session_state.carteirinha_appointments
+        
+        if carteirinha_index >= len(carteirinha_appointments):
+            display_carteirinha_completion_message()
+            return
+        
+        current_appointment = carteirinha_appointments[carteirinha_index]
+        
+        # Barra de progresso da Carteirinha
+        st.write("Progresso da Carteirinha")
+        st.progress((carteirinha_index + 1) / len(carteirinha_appointments))
+        st.markdown(f"<p class='progress-label'>{carteirinha_index + 1} de {len(carteirinha_appointments)}</p>", unsafe_allow_html=True)
+
+        # Card da Carteirinha
+        approval_card_html = f"""
+        <div class="approval-card">
+            <div class="approval-header">
+                <div class="patient-info">
+                    <div class="patient-avatar">{current_appointment['initials']}</div>
+                    <div>
+                        <div class="patient-name">{current_appointment['name']}</div>
+                        <div class="patient-phone"><i class="bi bi-telephone-fill"></i> {current_appointment['phone']}</div>
+                    </div>
+                </div>
+            </div>
+            <div class="details-grid">
+                <div class="detail-item"><i class="bi bi-person"></i><div><div class="detail-label">Profissional</div><div class="detail-value">{current_appointment['professional']}</div></div></div>
+                <div class="detail-item"><i class="bi bi-hospital"></i><div><div class="detail-label">Convênio</div><div class="detail-value">{current_appointment['insurance']}</div></div></div>
+                <div class="detail-item"><i class="bi bi-credit-card-2-front"></i><div><div class="detail-label">Carteirinha</div><div class="detail-value">{current_appointment['card_number']}</div></div></div>
+                <div class="detail-item"><i class="bi bi-tag"></i><div><div class="detail-label">Modalidade</div><div class="detail-value">{current_appointment['specialty']}</div></div></div>
+            </div>
+            <div class="observations-section">
+                <div class="detail-label">Observações</div>
+                <div class="detail-value">{current_appointment['notes']}</div>
+            </div>
+        </div>
+        """
+        st.markdown(approval_card_html, unsafe_allow_html=True)
+
+        # Botões de ação da Carteirinha
+        st.markdown('<div class="action-buttons-container">', unsafe_allow_html=True)
+        cols = st.columns(2)
+        if cols[0].button("✓ Aprovar início de agendamento", width='stretch'):
+            st.session_state.show_approve_carteirinha_dialog = True
+            st.rerun()
+        if cols[1].button("✕ Cancelar", width='stretch'):
+            st.session_state.show_cancel_dialog = True
+            st.rerun()
+        st.markdown('</div>', unsafe_allow_html=True)
+
+    # --- Lógica de Exibição para a Fila de AGENDAMENTO ---
+    elif st.session_state.approval_view == 'Agendamento':
+        agendamento_index = st.session_state.agendamento_index
+        agendamento_appointments = st.session_state.agendamento_appointments
+
+        if agendamento_index >= len(agendamento_appointments):
+            display_agendamento_completion_message()
+            return
+
+        current_appointment = agendamento_appointments[agendamento_index]
+
+        # Barra de progresso do Agendamento
+        st.write("Progresso do Agendamento")
+        st.progress((agendamento_index + 1) / len(agendamento_appointments))
+        st.markdown(f"<p class='progress-label'>{agendamento_index + 1} de {len(agendamento_appointments)}</p>", unsafe_allow_html=True)
+
+        # Card de aprovação completo
+        approval_card_html = f"""
+        <div class="approval-card">
+            <div class="approval-header">
+                <div class="patient-info">
+                    <div class="patient-avatar">{current_appointment['initials']}</div>
+                    <div>
+                        <div class="patient-name">{current_appointment['name']}</div>
+                        <div class="patient-phone"><i class="bi bi-telephone-fill"></i> {current_appointment['phone']}</div>
+                    </div>
+                </div>
+            </div>
+            <div class="details-grid">
+                <div class="detail-item"><i class="bi bi-calendar-event"></i><div><div class="detail-label">Data</div><div class="detail-value">{current_appointment['date']}</div></div></div>
+                <div class="detail-item"><i class="bi bi-person"></i><div><div class="detail-label">Profissional</div><div class="detail-value">{current_appointment['professional']}</div></div></div>
+                <div class="detail-item"><i class="bi bi-clock"></i><div><div class="detail-label">Horário</div><div class="detail-value">{current_appointment['time']}</div></div></div>
+                <div class="detail-item"><i class="bi bi-hospital"></i><div><div class="detail-label">Convênio</div><div class="detail-value">{current_appointment['insurance']}</div></div></div>
+                <div class="detail-item"><i class="bi bi-credit-card-2-front"></i><div><div class="detail-label">Carteirinha</div><div class="detail-value">{current_appointment['card_number']}</div></div></div>
+                <div class="detail-item"><i class="bi bi-tag"></i><div><div class="detail-label">Modalidade</div><div class="detail-value">{current_appointment['specialty']}</div></div></div>
+            </div>
+            <div class="observations-section">
+                <div class="detail-label">Observações</div>
+                <div class="detail-value">{current_appointment['notes']}</div>
+            </div>
+        </div>
+        """
+        st.markdown(approval_card_html, unsafe_allow_html=True)
+
+        # Botões de ação do Agendamento
+        st.markdown('<div class="action-buttons-container">', unsafe_allow_html=True)
+        cols = st.columns(3)
+        if cols[0].button("✓ Aprovar", width='stretch'):
+            st.session_state.show_approve_dialog = True
+            st.rerun()
+        if cols[1].button("↻ Reagendar", width='stretch'):
+            st.session_state.show_reschedule_dialog = True
+            st.rerun()
+        if cols[2].button("✕ Cancelar", width='stretch'):
+            st.session_state.show_cancel_dialog = True
+            st.rerun()
+        st.markdown('</div>', unsafe_allow_html=True)
+
+    # --- Diálogos (Modificados para obter o current_appointment correto) ---
+    # Determina qual é o agendamento atual com base na view ativa para os diálogos
+    active_view = st.session_state.approval_view
+    if active_view == 'Carteirinha' and st.session_state.carteirinha_index < len(st.session_state.carteirinha_appointments):
+        current_appointment_for_dialog = st.session_state.carteirinha_appointments[st.session_state.carteirinha_index]
+    elif active_view == 'Agendamento' and st.session_state.agendamento_index < len(st.session_state.agendamento_appointments):
+        current_appointment_for_dialog = st.session_state.agendamento_appointments[st.session_state.agendamento_index]
+    else:
+        current_appointment_for_dialog = None # Fila vazia, nenhum diálogo será mostrado
+
+    if current_appointment_for_dialog:
+        @st.dialog("Confirmar Aprovação")
+        def approve_dialog():
+            st.warning(f"Tem certeza que deseja aprovar o agendamento de **{current_appointment_for_dialog['name']}**?")
+            st.write("---")
+            st.radio("Acionar Julia?", ["Sim", "Não"], index=0, horizontal=True, key="acionar_julia_approve")
+            st.write("")
+            
+            if st.button("Sim, Aprovar", width='stretch'):
+                st.toast(f"{current_appointment_for_dialog['name']} aprovado(a)!", icon="✅")
+                go_to_next()
+                st.rerun()
+            if st.button("Voltar", width='stretch'):
+                st.session_state.show_approve_dialog = False
+                st.rerun()
+
+        if st.session_state.show_approve_dialog:
+            approve_dialog()
+
+        @st.dialog("Confirmar Início de Agendamento")
+        def approve_carteirinha_dialog():
+            st.write(f"Tem certeza que deseja aprovar o início do agendamento para **{current_appointment_for_dialog['name']}**?")
+            st.write("---")
+            st.radio("Acionar Julia?", ["Sim", "Não"], index=0, horizontal=True, key="acionar_julia_carteirinha")
+            st.write("")
+
+            if st.button("Sim, Aprovar Início", width='stretch'):
+                st.toast(f"Início de agendamento para {current_appointment_for_dialog['name']} aprovado!", icon="✅")
+                go_to_next()
+                st.rerun()
+            if st.button("Voltar", width='stretch'):
+                st.session_state.show_approve_carteirinha_dialog = False
+                st.rerun()
+
+        if st.session_state.show_approve_carteirinha_dialog:
+            approve_carteirinha_dialog()
+
+        @st.dialog("Confirmar Cancelamento")
+        def cancel_dialog():
+            st.warning(f"Tem certeza que deseja cancelar o agendamento de **{current_appointment_for_dialog['name']}**?")
+            motivo = st.selectbox(
+                "Selecione o motivo do cancelamento:",
+                ["Convênio não aprovado", "Paciente desistiu", "Profissional indisponível", "Erro no agendamento", "Outro motivo"]
+            )
+            st.write("")
+            st.radio("Acionar Julia?", ["Sim", "Não"], index=0, horizontal=True, key="acionar_julia_cancel")
+            st.write("")
+
+            if st.button("Sim, Cancelar", width='stretch'):
+                st.toast(f"{current_appointment_for_dialog['name']} cancelado(a). Motivo: {motivo}", icon="🗑️")
+                go_to_next()
+                st.rerun()
+            if st.button("Voltar", width='stretch'):
+                st.session_state.show_cancel_dialog = False
+                st.rerun()
+
+        if st.session_state.show_cancel_dialog:
+            cancel_dialog()
+
+        @st.dialog("Reagendar Consulta")
+        def reschedule_dialog():
+            st.markdown(f"**Paciente:** {current_appointment_for_dialog['name']}")
+            st.markdown(f"**Agendamento atual:** {current_appointment_for_dialog['date'].split(', ')[1]} às {current_appointment_for_dialog['time']}")
+            new_date = st.date_input("Nova Data")
+            new_time = st.time_input("Novo Horário", step=1800)
+            st.text_area("Mensagem para o Paciente (Opcional)")
+            st.write("---")
+            st.radio("Acionar Julia?", ["Sim", "Não"], index=0, horizontal=True, key="acionar_julia_reschedule")
+            st.write("")
+
+            if st.button("Enviar Sugestão", width='stretch'):
+                st.toast("Sugestão de reagendamento enviada!", icon="👍")
+                go_to_next()
+                st.rerun()
+            if st.button("Cancelar", width='stretch'):
+                st.session_state.show_reschedule_dialog = False
+                st.rerun()
+
+        if st.session_state.show_reschedule_dialog:
+            reschedule_dialog()
 
 # --- PÁGINA DE CONFIRMAÇÃO DE AGENDAMENTOS ---
 def confirmation_page():
