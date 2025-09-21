@@ -526,7 +526,6 @@ def daily_schedule_page():
         
         confirm_delete()
     
-
 # --- PÁGINA DE GESTÃO ---
 def management_page():
     st.write('##### Organize cadastros, especialidades e agendas com eficiência')
