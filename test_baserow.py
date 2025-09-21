@@ -43,7 +43,7 @@ def test_baserow_connection():
             'Categoria': 'category',
             'Status': 'status'
         }
-            
+        
         df.rename(columns=column_mapping, inplace=True)
 
         required_cols = ['name', 'scheduled_date', 'professional', 'category', 'status']

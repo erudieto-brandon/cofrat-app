@@ -289,29 +289,22 @@ def clear_filters_callback():
     st.session_state.status_filter = "Todos"
     st.session_state.search_term = ""
 
-# --- PÁGINAS ---
-# --- PÁGINA DA AGENDA DO DIA ---
+
 # --- FUNÇÃO DEDICADA PARA BUSCAR METADADOS DO BANCO DE DADOS ---
 def fetch_metadata_from_db(supabase_client):
     """
     Busca os metadados dos PDFs da tabela 'pdf_metadata' e retorna um DataFrame.
     """
     try:
-        # --- [INÍCIO DA CORREÇÃO] ---
-        # Sendo explícito sobre quais colunas selecionar para garantir que 'id' esteja presente.
         response = supabase_client.table('pdf_metadata').select(
             'id, created_at, data_upload, nome_arquivo, info_extraida'
         ).order('created_at', desc=True).execute()
-        # --- [FIM DA CORREÇÃO] ---
         
-        # A API retorna os dados dentro de uma chave 'data'
         data = response.data
         if not data:
             return pd.DataFrame()
         
-        # Converte a lista de dicionários em um DataFrame do Pandas
         df = pd.DataFrame(data)
-        # Renomeia as colunas para corresponder ao que o resto do app espera
         df = df.rename(columns={'data_upload': 'upload_date', 'nome_arquivo': 'file_name', 'info_extraida': 'extracted'})
         return df
 
@@ -319,14 +312,114 @@ def fetch_metadata_from_db(supabase_client):
         st.error(f"Não foi possível buscar os metadados do banco de dados: {e}")
         return pd.DataFrame()
 
+
+def get_daily_agenda_from_baserow(api_key):
+    """
+    Busca TODOS os dados da agenda da API do Baserow, tratando a paginação
+    e informando sobre registros descartados por inconsistência nos dados.
+    """
+    if not api_key:
+        st.error("A chave da API do Baserow (BASEROW_KEY) não foi configurada nos segredos do ambiente.")
+        return pd.DataFrame()
+
+    url = "https://api.baserow.io/api/database/rows/table/681080/?user_field_names=true&size=200"
+    headers = {"Authorization": f"Token {api_key}"}
+    all_rows = []
+
+    try:
+        while url:
+            response = requests.get(url, headers=headers)
+            response.raise_for_status()
+            data = response.json()
+            page_results = data.get('results', [])
+            if page_results:
+                all_rows.extend(page_results)
+            url = data.get('next')
+
+        if not all_rows:
+            st.warning("Nenhum dado de agendamento foi encontrado na tabela do Baserow.")
+            return pd.DataFrame()
+
+        df = pd.DataFrame(all_rows)
+        initial_row_count = len(df)
+
+        expected_baserow_columns = [
+            'Data do Agendamento', 'Horário', 'Nome do Paciente', 'Convênio', 
+            'Evento', 'Profissional', 'Especialidade'
+        ]
+        
+        for col in expected_baserow_columns:
+            if col not in df.columns:
+                st.error(f"Erro Crítico: A coluna '{col}' não foi encontrada na sua tabela do Baserow. Verifique se o nome da coluna está exatamente correto.")
+                return pd.DataFrame()
+
+        column_mapping = {
+            'Data do Agendamento': 'scheduled_date',
+            'Horário': 'time',
+            'Nome do Paciente': 'name',
+            'Convênio': 'insurance',
+            'Evento': 'event', 
+            'Profissional': 'professional',
+            'Especialidade': 'category'
+        }
+        df.rename(columns=column_mapping, inplace=True)
+
+        df['status'] = 'Pendente'
+        
+        # --- MODIFICAÇÃO: Tratamento e verificação da perda de dados ---
+        # 1. Converte a data, transformando formatos inválidos em 'NaT' (Not a Time).
+        df['scheduled_date'] = pd.to_datetime(df['scheduled_date'], dayfirst=True, errors='coerce')
+        
+        # 2. Remove as linhas onde a data resultou em 'NaT'.
+        df.dropna(subset=['scheduled_date'], inplace=True)
+        
+        # 3. Compara a contagem de linhas antes e depois da limpeza.
+        final_row_count = len(df)
+        if initial_row_count > final_row_count:
+            discarded_count = initial_row_count - final_row_count
+            # 4. Informa ao usuário que um ou mais registros foram descartados.
+            st.warning(
+                f"Atenção: {discarded_count} agendamento(s) foram ignorados. "
+                "Isso geralmente ocorre por um formato de data inválido ou um campo de data vazio na tabela do Baserow."
+            )
+        # --- FIM DA MODIFICAÇÃO ---
+
+        required_cols = ['name', 'scheduled_date', 'professional', 'category', 'status']
+        for col in required_cols:
+            if col not in df.columns:
+                st.error(f"A coluna esperada '{col}' não foi encontrada após o mapeamento. Verifique o dicionário 'column_mapping'.")
+                return pd.DataFrame(columns=required_cols)
+
+        return df
+
+    except requests.exceptions.RequestException as e:
+        st.error(f"Erro ao conectar com a API do Baserow: {e}")
+        return pd.DataFrame()
+    except Exception as e:
+        st.error(f"Ocorreu um erro inesperado ao processar os dados do Baserow: {e}")
+        return pd.DataFrame()
+
+# --- PÁGINAS ---
+# --- PÁGINA DA AGENDA DO DIA ---
 def daily_schedule_page():
-    """Exibe a agenda do dia com filtros e funcionalidade de upload para o Supabase."""
+    """Exibe a agenda do dia com filtros e funcionalidade de upload para o Supabase, com delay após o upload."""
     
-    # Conexão com o Supabase
+    # --- INICIALIZAÇÃO DO ESTADO DO CONTADOR ---
+    if 'countdown_active' not in st.session_state:
+        st.session_state.countdown_active = False
+    if 'countdown_timer' not in st.session_state:
+        st.session_state.countdown_timer = 0
+    
+    # --- NOVO: Inicialização do estado para rastrear extrações pendentes ---
+    if 'extraction_status' not in st.session_state:
+        st.session_state.extraction_status = {}
+
+    # Conexão com o Supabase e obtenção da chave Baserow
     load_dotenv()
     try:
         supabase_url = os.getenv("SUPABASE_URL")
         supabase_key = os.getenv("SUPABASE_KEY")
+        BASEROW_KEY = os.getenv("BASEROW_KEY")
         if not supabase_url or not supabase_key:
             st.error("As credenciais do Supabase não foram encontradas.")
             st.stop()
@@ -340,7 +433,7 @@ def daily_schedule_page():
         with st.spinner("Buscando metadados dos arquivos..."):
             st.session_state.files_df = fetch_metadata_from_db(supabase)
 
-    # --- SEÇÃO DE FILTROS E TABELA DE AGENDAMENTOS (CÓDIGO EXISTENTE) ---
+    # --- SEÇÃO DE FILTROS E TABELA DE AGENDAMENTOS ---
     st.subheader("Filtros")
     if "view_mode" not in st.session_state:
         st.session_state.view_mode = "Semana"
@@ -349,87 +442,132 @@ def daily_schedule_page():
         st.session_state.cat_filter = "Todos"
         st.session_state.status_filter = "Todos"
         st.session_state.search_term = ""
-    df = pd.DataFrame(get_daily_agenda_for_dataframe())
-    df['scheduled_date'] = pd.to_datetime(df['scheduled_date']).dt.date
-    with st.container(border=False):
-        col1, col2 = st.columns([3, 2])
-        col1.radio("Visualização:", ["Dia", "Semana", "Mês", "Trimestre", "Todo o período"], horizontal=True, key="view_mode", index=1)
-        col2.date_input("Data:", key="selected_date", disabled=(st.session_state.view_mode == "Todo o período"))
-        f_col1, f_col2, f_col3, f_col4 = st.columns(4)
-        f_col1.selectbox("Todos os profissionais", ["Todos"] + sorted(df['professional'].unique().tolist()), key="prof_filter")
-        f_col2.selectbox("Todas as categorias", ["Todos"] + sorted(df['category'].unique().tolist()), key="cat_filter")
-        f_col3.selectbox("Todos os status", ["Todos"] + sorted(df['status'].unique().tolist()), key="status_filter")
-        f_col4.selectbox("Todos os pacientes", ["Todos"], key="patient_filter", disabled=True)
-        search_col, btn_col = st.columns([4, 1.08])
-        search_col.text_input("Buscar paciente...", placeholder="Buscar paciente...", label_visibility="collapsed", key="search_term")
-        btn_col.button("Limpar Filtros", width='stretch', on_click=clear_filters_callback)
-    start_date, end_date = get_date_range(st.session_state.selected_date, st.session_state.view_mode)
-    filtered_df = df
-    if st.session_state.view_mode != "Todo o período":
-        filtered_df = df[(df['scheduled_date'] >= start_date) & (df['scheduled_date'] <= end_date)]
-    if st.session_state.prof_filter != "Todos":
-        filtered_df = filtered_df[filtered_df['professional'] == st.session_state.prof_filter]
-    if st.session_state.cat_filter != "Todos":
-        filtered_df = filtered_df[filtered_df['category'] == st.session_state.cat_filter]
-    if st.session_state.status_filter != "Todos":
-        filtered_df = filtered_df[filtered_df['status'] == st.session_state.status_filter]
-    if st.session_state.search_term:
-        filtered_df = filtered_df[filtered_df['name'].str.contains(st.session_state.search_term, case=False, na=False)]
-    if st.session_state.view_mode == "Dia":
-        st.header(f"Agendamentos para {st.session_state.selected_date.strftime('%d/%m/%Y')}")
-    elif st.session_state.view_mode == "Todo o período":
-        st.header("Exibindo todos os agendamentos")
+    
+    df = get_daily_agenda_from_baserow(BASEROW_KEY)
+
+    if df.empty:
+        st.warning("Não foi possível carregar os dados da agenda para aplicar os filtros.")
     else:
-        st.header(f"Agendamentos de {start_date.strftime('%d/%m/%Y')} até {end_date.strftime('%d/%m/%Y')}")
-    total_agendamentos = len(filtered_df[filtered_df['status'] != 'Cancelado'])
-    confirmados = len(filtered_df[filtered_df['status'] == 'Confirmado'])
-    pendentes = len(filtered_df[~filtered_df['status'].isin(['Confirmado', 'Cancelado'])])
-    st.markdown(f"""<div style="display: flex; align-items: center; gap: 20px; font-size: 1.1rem; margin-bottom: 15px;"><span><i class="bi bi-people-fill"></i> <b>{total_agendamentos}</b> agendamentos</span><span style="color: #28a745;"><b>{confirmados}</b> confirmadas</span><span style="color: #ffc107;"><b>{pendentes}</b> pendentes</span></div>""", unsafe_allow_html=True)
-    st.markdown('<div class="agenda-table-container">', unsafe_allow_html=True)
-    st.dataframe(filtered_df.rename(columns={'name': 'Paciente','scheduled_date': 'Data Agendada','professional': 'Profissional','category': 'Categoria','status': 'Status'}), width='stretch', hide_index=True)
-    st.markdown('</div>', unsafe_allow_html=True)
+        df['scheduled_date'] = df['scheduled_date'].dt.date
+
+        with st.container(border=False):
+            col1, col2 = st.columns([3, 2])
+            col1.radio("Visualização:", ["Dia", "Semana", "Mês", "Trimestre", "Todo o período"], horizontal=True, key="view_mode", index=4)
+            col2.date_input("Data:", key="selected_date", disabled=(st.session_state.view_mode == "Todo o período"))
+            f_col1, f_col2, f_col3, f_col4 = st.columns(4)
+            f_col1.selectbox("Todos os profissionais", ["Todos"] + sorted(df['professional'].unique().tolist()), key="prof_filter")
+            f_col2.selectbox("Todas as categorias", ["Todos"] + sorted(df['category'].unique().tolist()), key="cat_filter")
+            f_col3.selectbox("Todos os status", ["Todos"] + sorted(df['status'].unique().tolist()), key="status_filter")
+            f_col4.selectbox("Todos os pacientes", ["Todos"], key="patient_filter", disabled=True)
+            search_col, btn_col = st.columns([4, 1.08])
+            search_col.text_input("Buscar paciente...", placeholder="Buscar paciente...", label_visibility="collapsed", key="search_term")
+            btn_col.button("Limpar Filtros", width='stretch', on_click=clear_filters_callback)
+        
+        start_date, end_date = get_date_range(st.session_state.selected_date, st.session_state.view_mode)
+        filtered_df = df
+        if st.session_state.view_mode != "Todo o período":
+            filtered_df = df[(df['scheduled_date'] >= start_date) & (df['scheduled_date'] <= end_date)]
+        if st.session_state.prof_filter != "Todos":
+            filtered_df = filtered_df[filtered_df['professional'] == st.session_state.prof_filter]
+        if st.session_state.cat_filter != "Todos":
+            filtered_df = filtered_df[filtered_df['category'] == st.session_state.cat_filter]
+        if st.session_state.status_filter != "Todos":
+            filtered_df = filtered_df[filtered_df['status'] == st.session_state.status_filter]
+        if st.session_state.search_term:
+            filtered_df = filtered_df[filtered_df['name'].str.contains(st.session_state.search_term, case=False, na=False)]
+        
+        if st.session_state.view_mode == "Dia":
+            st.header(f"Agendamentos para {st.session_state.selected_date.strftime('%d/%m/%Y')}")
+        elif st.session_state.view_mode == "Todo o período":
+            st.header("Exibindo todos os agendamentos")
+        else:
+            st.header(f"Agendamentos de {start_date.strftime('%d/%m/%Y')} até {end_date.strftime('%d/%m/%Y')}")
+        
+        total_agendamentos = len(filtered_df)
+        confirmados = len(filtered_df[filtered_df['event'] == 'Confirmado'])
+        pendentes = len(filtered_df[filtered_df['status'] == 'Pendente'])
+        
+        st.markdown(f"""<div style="display: flex; align-items: center; gap: 20px; font-size: 1.1rem; margin-bottom: 15px;"><span><i class="bi bi-people-fill"></i> <b>{total_agendamentos}</b> agendamentos</span><span style="color: #28a745;"><b>{confirmados}</b> confirmadas</span><span style="color: #ffc107;"><b>{pendentes}</b> pendentes</span></div>""", unsafe_allow_html=True)
+        
+        display_df = filtered_df.copy()
+        display_df['scheduled_date'] = pd.to_datetime(display_df['scheduled_date']).dt.strftime('%d/%m/%Y')
+        display_columns_order = ['scheduled_date', 'time', 'name', 'insurance', 'event', 'status']
+        display_df = display_df[display_columns_order]
+        display_df.rename(columns={
+            'scheduled_date': 'Data Agendada',
+            'time': 'Horário',
+            'name': 'Paciente',
+            'insurance': 'Convênio',
+            'event': 'Evento',
+            'status': 'Status'
+        }, inplace=True)
+
+        st.markdown('<div class="agenda-table-container">', unsafe_allow_html=True)
+        st.dataframe(display_df, hide_index=True)
+        st.markdown('</div>', unsafe_allow_html=True)
     
     # --- LÓGICA DE UPLOAD PARA O SUPABASE (STORAGE + DATABASE) ---
-    uploaded_files = st.file_uploader(
-        "Arraste e solte os arquivos aqui",
-        type="pdf",
-        accept_multiple_files=True
-    )
+    if not st.session_state.countdown_active:
+        uploaded_files = st.file_uploader(
+            "Arraste e solte os arquivos aqui",
+            type="pdf",
+            accept_multiple_files=True
+        )
 
-    if uploaded_files:
-        for uploaded_file in uploaded_files:
-            file_name_with_date = f"{date.today().strftime('%Y-%m-%d')}_{uploaded_file.name}"
-            file_path_in_bucket = f"pdfs-agendamento/{file_name_with_date}"
-            
-            try:
-                # 1. Envia para o Storage
-                with st.spinner(f'Enviando "{uploaded_file.name}" para o Storage...'):
-                    supabase.storage.from_("cofrat").upload(
-                        path=file_path_in_bucket,
-                        file=uploaded_file.getvalue(),
-                        file_options={"content-type": "application/pdf"}
-                    )
+        if uploaded_files:
+            any_success = False
+            for uploaded_file in uploaded_files:
+                file_name_with_date = f"{date.today().strftime('%Y-%m-%d')}_{uploaded_file.name}"
+                file_path_in_bucket = f"pdfs-agendamento/{file_name_with_date}"
                 
-                # 2. Insere o metadado no Banco de Dados
-                with st.spinner(f'Registrando "{uploaded_file.name}" no banco de dados...'):
-                    supabase.table('pdf_metadata').insert({
-                        'data_upload': date.today().isoformat(),
-                        'nome_arquivo': file_name_with_date
-                        # 'info_extraida' usará o valor padrão "Não" definido na tabela
-                    }).execute()
+                try:
+                    with st.spinner(f'Enviando "{uploaded_file.name}" para o Storage...'):
+                        supabase.storage.from_("cofrat").upload(
+                            path=file_path_in_bucket,
+                            file=uploaded_file.getvalue(),
+                            file_options={"content-type": "application/pdf"}
+                        )
+                    
+                    with st.spinner(f'Registrando "{uploaded_file.name}" no banco de dados...'):
+                        supabase.table('pdf_metadata').insert({
+                            'data_upload': date.today().isoformat(),
+                            'nome_arquivo': file_name_with_date,
+                            'info_extraida': 'Não'
+                        }).execute()
 
-                st.success(f'✅ Arquivo "{uploaded_file.name}" processado com sucesso!')
+                    st.success(f'✅ Arquivo "{uploaded_file.name}" processado com sucesso!')
+                    any_success = True
 
-            except Exception as e:
-                if "Duplicate" in str(e):
-                     st.warning(f'⚠️ O arquivo "{uploaded_file.name}" já existe no storage ou no banco de dados.')
-                else:
-                    st.error(f'❌ Ocorreu um erro no processo de upload: {e}')
-        
-        # Após o upload, força a atualização da lista a partir do DB
-        with st.spinner("Atualizando lista de arquivos..."):
-            st.session_state.files_df = fetch_metadata_from_db(supabase)
-        st.rerun()
+                except Exception as e:
+                    if "Duplicate" in str(e):
+                         st.warning(f'⚠️ O arquivo "{uploaded_file.name}" já existe no storage ou no banco de dados.')
+                         any_success = True
+                    else:
+                        st.error(f'❌ Ocorreu um erro no processo de upload: {e}')
+
+            if any_success:
+                st.session_state.countdown_active = True
+                st.session_state.countdown_timer = 5
+                st.rerun()
+
+    # --- BLOCO DO CONTADOR (DELAY) ---
+    if st.session_state.countdown_active:
+        timer = st.session_state.countdown_timer
+
+        if timer > 0:
+            countdown_placeholder = st.empty()
+            with countdown_placeholder.container():
+                st.info(f"🔄 Processamento concluído. Atualizando a lista em {timer} segundos...")
+
+            time.sleep(1)
+            st.session_state.countdown_timer -= 1
+            st.rerun()
+
+        else:
+            st.session_state.countdown_active = False
+            with st.spinner("Atualizando lista de arquivos..."):
+                st.session_state.files_df = fetch_metadata_from_db(supabase)
+            st.rerun()
 
     # --- LISTA DE STATUS DE UPLOAD (LENDO DO DATAFRAME DO DB) ---
     st.write("---")
@@ -438,16 +576,22 @@ def daily_schedule_page():
     with col_header1:
         st.subheader("Status da Extração de Arquivos")
     with col_header2:
+        is_any_extraction_pending = any(status == 'pending' for status in st.session_state.extraction_status.values())
         if st.button("🔄 Atualizar Lista", use_container_width=True):
             with st.spinner("Buscando metadados dos arquivos..."):
                 st.session_state.files_df = fetch_metadata_from_db(supabase)
+                for file_id, status in list(st.session_state.extraction_status.items()):
+                    if status == 'pending':
+                        if not st.session_state.files_df[st.session_state.files_df['id'] == file_id].empty and \
+                           st.session_state.files_df[st.session_state.files_df['id'] == file_id]['extracted'].iloc[0] == 'Sim':
+                            del st.session_state.extraction_status[file_id]
             st.rerun()
 
     files_df = st.session_state.files_df
     if files_df.empty:
         st.info("Nenhum metadado de arquivo encontrado no banco de dados.")
     else:
-        header_cols = st.columns([2, 4, 2, 3]) # Ajustado para 4 colunas de botões
+        header_cols = st.columns([2, 4, 2, 3])
         header_cols[0].markdown("**Data de upload**")
         header_cols[1].markdown("**Nome do arquivo**")
         header_cols[2].markdown("**Info Extraída**")
@@ -459,41 +603,50 @@ def daily_schedule_page():
             col1.write(datetime.strptime(row['upload_date'], '%Y-%m-%d').strftime('%d/%m/%Y'))
             col2.write(row['file_name'])
             
-            if row['extracted'] == 'Sim':
+            current_extraction_status = st.session_state.extraction_status.get(row['id'], None)
+
+            if current_extraction_status == 'pending':
+                col3.markdown("<span style='color: orange;'>Extraindo... <i class='bi bi-hourglass-split'></i></span>", unsafe_allow_html=True)
+            elif row['extracted'] == 'Sim':
                 col3.markdown("<span style='color: green;'>Sim</span>", unsafe_allow_html=True)
             else:
                 col3.markdown("<span style='color: orange;'>Não</span>", unsafe_allow_html=True)
             
-            # Coluna de botões
             with col4:
                 btn_cols = st.columns(2)
-                # Botão de Extrair
-                if row['extracted'] != 'Sim':
-                    if btn_cols[0].button("Extrair", key=f"extract_{row['id']}", use_container_width=True):
-                        WEBHOOK_URL = "https://webhook.erudieto.com.br/webhook/cofrat-pdf"
-                        payload = {'fileName': row['file_name']} # Enviando o nome do arquivo para o n8n
+                is_disabled = st.session_state.countdown_active or current_extraction_status == 'pending'
+
+                if row['extracted'] != 'Sim' and current_extraction_status != 'pending':
+                    if btn_cols[0].button("Extrair", key=f"extract_{row['id']}", use_container_width=True, disabled=is_disabled):
+                        WEBHOOK_URL = "https://n8n.erudieto.com.br/webhook-test/cofrat-pdf"
+                        payload = {'fileName': row['file_name'], 'fileId': row['id']}
+                        
+                        st.session_state.extraction_status[row['id']] = 'pending'
                         
                         with st.spinner(f"Acionando automação para '{row['file_name']}'..."):
                             try:
-                                response = requests.post(WEBHOOK_URL, json=payload, timeout=300)
-                                if response.status_code == 200 and response.json().get('info_extraida') == 'Sim':
-                                    # ATUALIZA O BANCO DE DADOS
-                                    supabase.table('pdf_metadata').update({'info_extraida': 'Sim'}).eq('id', row['id']).execute()
-                                    st.success(f"Extração concluída para '{row['file_name']}'!")
-                                    # Recarrega os dados do DB
-                                    st.session_state.files_df = fetch_metadata_from_db(supabase)
+                                response = requests.post(WEBHOOK_URL, json=payload, timeout=5)
+                                
+                                if response.status_code in [200, 202]:
+                                    st.success(f"Extração para '{row['file_name']}' iniciada. O status será atualizado em breve.")
                                     st.rerun()
                                 else:
-                                    st.error(f"Falha na resposta do webhook: {response.text}")
+                                    st.error(f"Falha ao iniciar extração (código {response.status_code}): {response.text}")
+                                    st.session_state.extraction_status[row['id']] = 'failed'
+                                    st.rerun()
                             except requests.exceptions.RequestException as e:
                                 st.error(f"Erro de conexão com o webhook: {e}")
+                                st.session_state.extraction_status[row['id']] = 'failed'
+                                st.rerun()
+                elif current_extraction_status == 'pending':
+                    btn_cols[0].markdown('<div style="text-align: center; color: orange; font-size: 0.85em;">Extraindo...</div>', unsafe_allow_html=True)
+                else:
+                    btn_cols[0].button("Extraído", key=f"extracted_disabled_{row['id']}", use_container_width=True, disabled=True)
                 
-                # Botão de Deletar
-                if btn_cols[1].button("🗑️", key=f"delete_{row['id']}", help=f"Deletar {row['file_name']}", use_container_width=True):
+                if btn_cols[1].button("🗑️", key=f"delete_{row['id']}", help=f"Deletar {row['file_name']}", use_container_width=True, disabled=is_disabled):
                     st.session_state.file_to_delete = row
                     st.rerun()
 
-    # --- DIÁLOGO DE CONFIRMAÇÃO DE DELEÇÃO ---
     if 'file_to_delete' in st.session_state and st.session_state.file_to_delete is not None:
         file_info = st.session_state.file_to_delete
         
@@ -504,15 +657,14 @@ def daily_schedule_page():
             
             if st.button("Sim, deletar agora", type="primary"):
                 try:
-                    # 1. Deleta do Storage
                     supabase.storage.from_("cofrat").remove([f"pdfs-agendamento/{file_info['file_name']}"])
-                    # 2. Deleta do Banco de Dados
                     supabase.table('pdf_metadata').delete().eq('id', file_info['id']).execute()
                     
                     st.success("Arquivo deletado com sucesso!")
-                    # Limpa o estado e recarrega os dados
                     st.session_state.file_to_delete = None
                     st.session_state.files_df = fetch_metadata_from_db(supabase)
+                    if file_info['id'] in st.session_state.extraction_status:
+                        del st.session_state.extraction_status[file_info['id']]
                     st.rerun()
 
                 except Exception as e:
@@ -843,7 +995,7 @@ def confirmation_queue_page():
 
         @st.dialog("Confirmar Início de Agendamento")
         def approve_carteirinha_dialog():
-            st.write(f"Tem certeza que deseja aprovar o início do agendamento para **{current_appointment_for_dialog['name']}**?")
+            st.warning(f"Tem certeza que deseja aprovar o início do agendamento para **{current_appointment_for_dialog['name']}**?")
             st.write("---")
             st.radio("Acionar Julia?", ["Sim", "Não"], index=0, horizontal=True, key="acionar_julia_carteirinha")
             st.write("")
