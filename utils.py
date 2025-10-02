@@ -279,16 +279,6 @@ def get_date_range(selected_date, view_mode):
         end_of_quarter = start_of_quarter + relativedelta(months=3) - timedelta(days=1)
         return start_of_quarter, end_of_quarter
 
-# --- Função para limpar todos os filtros ---
-def clear_filters_callback():
-    """Função de callback para limpar todos os filtros."""
-    st.session_state.view_mode = "Todo o período"
-    st.session_state.selected_date = date(2025, 1, 15)
-    st.session_state.prof_filter = "Todos"
-    st.session_state.cat_filter = "Todos"
-    st.session_state.status_filter = "Todos"
-    st.session_state.search_term = ""
-
 
 # --- FUNÇÃO DEDICADA PARA BUSCAR METADADOS DO BANCO DE DADOS ---
 def fetch_metadata_from_db(supabase_client):
@@ -375,13 +365,7 @@ def get_daily_agenda_from_baserow(api_key):
         
         # 3. Compara a contagem de linhas antes e depois da limpeza.
         final_row_count = len(df)
-        if initial_row_count > final_row_count:
-            discarded_count = initial_row_count - final_row_count
-            # 4. Informa ao usuário que um ou mais registros foram descartados.
-            st.warning(
-                f"Atenção: {discarded_count} agendamento(s) foram ignorados. "
-                "Isso geralmente ocorre por um formato de data inválido ou um campo de data vazio na tabela do Baserow."
-            )
+
         # --- FIM DA MODIFICAÇÃO ---
 
         required_cols = ['name', 'scheduled_date', 'professional', 'category', 'status']
@@ -398,6 +382,19 @@ def get_daily_agenda_from_baserow(api_key):
     except Exception as e:
         st.error(f"Ocorreu um erro inesperado ao processar os dados do Baserow: {e}")
         return pd.DataFrame()
+
+# --- Função para limpar todos os filtros ---
+def clear_filters_callback():
+    """Função de callback para limpar todos os filtros."""
+    st.session_state.view_mode = "Todo o período"
+    st.session_state.selected_date = date.today() # Modificado para usar a data atual
+    st.session_state.prof_filter = "Todos"
+    st.session_state.cat_filter = "Todos"
+    st.session_state.status_filter = "Todos"
+    st.session_state.patient_filter = "Todos"    # Adicionado para limpar o filtro de paciente
+    st.session_state.insurance_filter = "Todos"  # Adicionado para limpar o filtro de convênio
+    st.session_state.event_filter = "Todos"      # Adicionado para limpar o filtro de evento
+    st.session_state.search_term = ""
 
 # --- PÁGINAS ---
 # --- PÁGINA DA AGENDA DO DIA ---
@@ -442,6 +439,10 @@ def daily_schedule_page():
         st.session_state.cat_filter = "Todos"
         st.session_state.status_filter = "Todos"
         st.session_state.search_term = ""
+        # Inicialização dos novos filtros
+        st.session_state.patient_filter = "Todos"
+        st.session_state.insurance_filter = "Todos"
+        st.session_state.event_filter = "Todos"
     
     df = get_daily_agenda_from_baserow(BASEROW_KEY)
 
@@ -454,11 +455,26 @@ def daily_schedule_page():
             col1, col2 = st.columns([3, 2])
             col1.radio("Visualização:", ["Dia", "Semana", "Mês", "Trimestre", "Todo o período"], horizontal=True, key="view_mode", index=4)
             col2.date_input("Data:", key="selected_date", disabled=(st.session_state.view_mode == "Todo o período"))
-            f_col1, f_col2, f_col3, f_col4 = st.columns(4)
-            f_col1.selectbox("Todos os profissionais", ["Todos"] + sorted(df['professional'].unique().tolist()), key="prof_filter")
-            f_col2.selectbox("Todas as categorias", ["Todos"] + sorted(df['category'].unique().tolist()), key="cat_filter")
-            f_col3.selectbox("Todos os status", ["Todos"] + sorted(df['status'].unique().tolist()), key="status_filter")
-            f_col4.selectbox("Todos os pacientes", ["Todos"], key="patient_filter", disabled=True)
+            
+            # Linha de filtros expandida para 6 colunas
+            f_col1, f_col2, f_col3, f_col4, f_col5, f_col6 = st.columns(6)
+            f_col1.selectbox("Profissionais", ["Todos"] + sorted(df['professional'].unique().tolist()), key="prof_filter")
+            f_col2.selectbox("Categorias", ["Todos"] + sorted(df['category'].unique().tolist()), key="cat_filter")
+            
+            # Garante que as opções de status sempre incluam as novas categorias
+            existing_statuses = sorted(df['status'].unique().tolist())
+            required_statuses = ["Pendente", "Reagendado", "Cancelado"]
+            all_statuses = sorted(list(set(existing_statuses + required_statuses)))
+            status_options = ["Todos"] + all_statuses
+            f_col3.selectbox("Status", status_options, key="status_filter")
+            
+            # Filtro de pacientes habilitado e populado
+            f_col4.selectbox("Pacientes", ["Todos"] + sorted(df['name'].unique().tolist()), key="patient_filter")
+            
+            # Novos filtros adicionados
+            f_col5.selectbox("Convênios", ["Todos"] + sorted(df['insurance'].unique().tolist()), key="insurance_filter")
+            f_col6.selectbox("Eventos", ["Todos"] + sorted(df['event'].unique().tolist()), key="event_filter")
+
             search_col, btn_col = st.columns([4, 1.08])
             search_col.text_input("Buscar paciente...", placeholder="Buscar paciente...", label_visibility="collapsed", key="search_term")
             btn_col.button("Limpar Filtros", width='stretch', on_click=clear_filters_callback)
@@ -473,6 +489,15 @@ def daily_schedule_page():
             filtered_df = filtered_df[filtered_df['category'] == st.session_state.cat_filter]
         if st.session_state.status_filter != "Todos":
             filtered_df = filtered_df[filtered_df['status'] == st.session_state.status_filter]
+        
+        # Lógica de filtro para os novos campos
+        if st.session_state.patient_filter != "Todos":
+            filtered_df = filtered_df[filtered_df['name'] == st.session_state.patient_filter]
+        if st.session_state.insurance_filter != "Todos":
+            filtered_df = filtered_df[filtered_df['insurance'] == st.session_state.insurance_filter]
+        if st.session_state.event_filter != "Todos":
+            filtered_df = filtered_df[filtered_df['event'] == st.session_state.event_filter]
+
         if st.session_state.search_term:
             filtered_df = filtered_df[filtered_df['name'].str.contains(st.session_state.search_term, case=False, na=False)]
         
@@ -483,11 +508,23 @@ def daily_schedule_page():
         else:
             st.header(f"Agendamentos de {start_date.strftime('%d/%m/%Y')} até {end_date.strftime('%d/%m/%Y')}")
         
+        # Cálculo das contagens para todas as categorias
         total_agendamentos = len(filtered_df)
-        confirmados = len(filtered_df[filtered_df['event'] == 'Confirmado'])
+        confirmados = len(filtered_df[filtered_df['status'] == 'Confirmado'])
         pendentes = len(filtered_df[filtered_df['status'] == 'Pendente'])
+        reagendados = len(filtered_df[filtered_df['status'] == 'Reagendado'])
+        cancelados = len(filtered_df[filtered_df['status'] == 'Cancelado'])
         
-        st.markdown(f"""<div style="display: flex; align-items: center; gap: 20px; font-size: 1.1rem; margin-bottom: 15px;"><span><i class="bi bi-people-fill"></i> <b>{total_agendamentos}</b> agendamentos</span><span style="color: #28a745;"><b>{confirmados}</b> confirmadas</span><span style="color: #ffc107;"><b>{pendentes}</b> pendentes</span></div>""", unsafe_allow_html=True)
+        # Exibição das contagens com as novas categorias e cores
+        st.markdown(f"""
+            <div style="display: flex; align-items: center; gap: 20px; font-size: 1.1rem; margin-bottom: 15px;">
+                <span><i class="bi bi-people-fill"></i> <b>{total_agendamentos}</b> agendamentos</span>
+                <span style="color: #28a745;"><b>{confirmados}</b> confirmadas</span>
+                <span style="color: darkorange;"><b>{pendentes}</b> pendentes</span>
+                <span style="color: #007bff;"><b>{reagendados}</b> reagendados</span>
+                <span style="color: #6c757d;"><b>{cancelados}</b> cancelados</span>
+            </div>
+        """, unsafe_allow_html=True)
         
         display_df = filtered_df.copy()
         display_df['scheduled_date'] = pd.to_datetime(display_df['scheduled_date']).dt.strftime('%d/%m/%Y')
@@ -591,61 +628,66 @@ def daily_schedule_page():
     if files_df.empty:
         st.info("Nenhum metadado de arquivo encontrado no banco de dados.")
     else:
-        header_cols = st.columns([2, 4, 2, 3])
-        header_cols[0].markdown("**Data de upload**")
-        header_cols[1].markdown("**Nome do arquivo**")
-        header_cols[2].markdown("**Info Extraída**")
-        st.markdown("---")
+        # --- [LAYOUT MELHORADO] ---
+        with st.container(border=True):
+            # Cabeçalho da "tabela"
+            header_cols = st.columns([2, 4, 2, 3])
+            header_cols[0].markdown("**Data de upload**")
+            header_cols[1].markdown("**Nome do arquivo**")
+            header_cols[2].markdown("**Info Extraída**")
+            header_cols[3].markdown("<div style='text-align: center;'><b>Ações</b></div>", unsafe_allow_html=True)
 
-        for index, row in files_df.iterrows():
-            col1, col2, col3, col4 = st.columns([2, 4, 2, 3])
-            
-            col1.write(datetime.strptime(row['upload_date'], '%Y-%m-%d').strftime('%d/%m/%Y'))
-            col2.write(row['file_name'])
-            
-            current_extraction_status = st.session_state.extraction_status.get(row['id'], None)
+            # Linhas da "tabela"
+            for index, row in files_df.iterrows():
+                st.divider() # Adiciona uma linha divisória entre os registros
+                col1, col2, col3, col4 = st.columns([2, 4, 2, 3])
+                
+                col1.write(datetime.strptime(row['upload_date'], '%Y-%m-%d').strftime('%d/%m/%Y'))
+                col2.write(row['file_name'])
+                
+                current_extraction_status = st.session_state.extraction_status.get(row['id'], None)
 
-            if current_extraction_status == 'pending':
-                col3.markdown("<span style='color: orange;'>Extraindo... <i class='bi bi-hourglass-split'></i></span>", unsafe_allow_html=True)
-            elif row['extracted'] == 'Sim':
-                col3.markdown("<span style='color: green;'>Sim</span>", unsafe_allow_html=True)
-            else:
-                col3.markdown("<span style='color: orange;'>Não</span>", unsafe_allow_html=True)
-            
-            with col4:
-                btn_cols = st.columns(2)
-                is_disabled = st.session_state.countdown_active or current_extraction_status == 'pending'
+                if current_extraction_status == 'pending':
+                    col3.markdown("<span style='color: darkorange;'>Extraindo... <i class='bi bi-hourglass-split'></i></span>", unsafe_allow_html=True)
+                elif row['extracted'] == 'Sim':
+                    col3.markdown("<span style='color: green;'>Sim</span>", unsafe_allow_html=True)
+                else:
+                    col3.markdown("<span style='color: darkorange;'>Não</span>", unsafe_allow_html=True)
+                
+                with col4:
+                    btn_cols = st.columns(2)
+                    is_disabled = st.session_state.countdown_active or current_extraction_status == 'pending'
 
-                if row['extracted'] != 'Sim' and current_extraction_status != 'pending':
-                    if btn_cols[0].button("Extrair", key=f"extract_{row['id']}", use_container_width=True, disabled=is_disabled):
-                        WEBHOOK_URL = "https://n8n.erudieto.com.br/webhook-test/cofrat-pdf"
-                        payload = {'fileName': row['file_name'], 'fileId': row['id']}
-                        
-                        st.session_state.extraction_status[row['id']] = 'pending'
-                        
-                        with st.spinner(f"Acionando automação para '{row['file_name']}'..."):
-                            try:
-                                response = requests.post(WEBHOOK_URL, json=payload, timeout=5)
-                                
-                                if response.status_code in [200, 202]:
-                                    st.success(f"Extração para '{row['file_name']}' iniciada. O status será atualizado em breve.")
-                                    st.rerun()
-                                else:
-                                    st.error(f"Falha ao iniciar extração (código {response.status_code}): {response.text}")
+                    if row['extracted'] != 'Sim' and current_extraction_status != 'pending':
+                        if btn_cols[0].button("Extrair", key=f"extract_{row['id']}", use_container_width=True, disabled=is_disabled):
+                            WEBHOOK_URL = "https://webhook.erudieto.com.br/webhook/cofrat-pdf"
+                            payload = {'fileName': row['file_name'], 'fileId': row['id']}
+                            
+                            st.session_state.extraction_status[row['id']] = 'pending'
+                            
+                            with st.spinner(f"Acionando automação para '{row['file_name']}'..."):
+                                try:
+                                    response = requests.post(WEBHOOK_URL, json=payload, timeout=5)
+                                    
+                                    if response.status_code in [200, 202]:
+                                        st.success(f"Extração para '{row['file_name']}' iniciada. O status será atualizado em breve.")
+                                        st.rerun()
+                                    else:
+                                        st.error(f"Falha ao iniciar extração (código {response.status_code}): {response.text}")
+                                        st.session_state.extraction_status[row['id']] = 'failed'
+                                        st.rerun()
+                                except requests.exceptions.RequestException as e:
+                                    st.error(f"Erro de conexão com o webhook: {e}")
                                     st.session_state.extraction_status[row['id']] = 'failed'
                                     st.rerun()
-                            except requests.exceptions.RequestException as e:
-                                st.error(f"Erro de conexão com o webhook: {e}")
-                                st.session_state.extraction_status[row['id']] = 'failed'
-                                st.rerun()
-                elif current_extraction_status == 'pending':
-                    btn_cols[0].markdown('<div style="text-align: center; color: orange; font-size: 0.85em;">Extraindo...</div>', unsafe_allow_html=True)
-                else:
-                    btn_cols[0].button("Extraído", key=f"extracted_disabled_{row['id']}", use_container_width=True, disabled=True)
-                
-                if btn_cols[1].button("🗑️", key=f"delete_{row['id']}", help=f"Deletar {row['file_name']}", use_container_width=True, disabled=is_disabled):
-                    st.session_state.file_to_delete = row
-                    st.rerun()
+                    elif current_extraction_status == 'pending':
+                        btn_cols[0].markdown('<div style="text-align: center; color: darkorange; font-size: 0.85em;">Extraindo...</div>', unsafe_allow_html=True)
+                    else:
+                        btn_cols[0].button("Extraído", key=f"extracted_disabled_{row['id']}", use_container_width=True, disabled=True)
+                    
+                    if btn_cols[1].button("🗑️", key=f"delete_{row['id']}", help=f"Deletar {row['file_name']}", use_container_width=True, disabled=is_disabled):
+                        st.session_state.file_to_delete = row
+                        st.rerun()
 
     if 'file_to_delete' in st.session_state and st.session_state.file_to_delete is not None:
         file_info = st.session_state.file_to_delete
