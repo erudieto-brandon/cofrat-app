@@ -1376,7 +1376,7 @@ def chatwoot_page():
     with col2:
         if st.button("🚀 Marcar todas como lidas", use_container_width=True, type="primary"):
             # Substitua pela URL real do seu webhook no n8n
-            WEBHOOK_URL = "https://n8n.erudieto.com.br/webhook-test/mark-all-as-read"
+            WEBHOOK_URL = "https://webhook.erudieto.com.br/webhook/mark-all-as-read"
             
             with st.spinner("Aguarde, acionando o fluxo no n8n..."):
                 try:
