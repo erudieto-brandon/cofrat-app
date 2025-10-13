@@ -1092,25 +1092,33 @@ def approval_workflow_page():
                         st.session_state.agendamento_appointments.pop(active_idx)
                         st.rerun()
 
-# --- [AJUSTADA] PÁGINA DE CONFIRMAÇÃO DE AGENDAMENTOS ---
+
+# --- [LAYOUT AJUSTADO 3 COLUNAS] PÁGINA DE CONFIRMAÇÃO DE AGENDAMENTOS ---
 def confirmation_page():
     """
-    Exibe a página de confirmação em massa com filtros avançados, resumo de dados e preview corrigido.
+    Exibe a página de confirmação em massa com novo layout de 3 colunas para templates, 
+    filtros avançados, CRUD de templates e pop-ups de confirmação.
     """
+    # --- Importações necessárias ---
+    import pandas as pd
+    import os
+    from datetime import date, timedelta
+    import requests
+    
     st.write('##### Comunicação em massa para agendamentos')
     st.write('Esta página permite confirmar ou cancelar agendamentos em massa. Use os filtros para selecionar um período e refinar a lista de pacientes antes de enviar as comunicações.')
     st.write('')
 
-    # --- CONEXÃO COM BASEROW E BUSCA DE DADOS ---
+    # --- FUNÇÕES HELPER ---
+    
+    # Função para carregar dados do Baserow
     def get_confirmation_data_from_baserow(api_key):
         if not api_key:
             st.error("A chave da API do Baserow (BASEROW_KEY) não foi configurada.")
             return pd.DataFrame()
-
         url = "https://api.baserow.io/api/database/rows/table/681080/?user_field_names=true&size=200"
         headers = {"Authorization": f"Token {api_key}"}
         all_rows = []
-
         try:
             while url:
                 response = requests.get(url, headers=headers)
@@ -1118,41 +1126,41 @@ def confirmation_page():
                 data = response.json()
                 all_rows.extend(data.get('results', []))
                 url = data.get('next')
-
-            if not all_rows:
-                return pd.DataFrame()
-
+            if not all_rows: return pd.DataFrame()
             df = pd.DataFrame(all_rows)
-            
-            expected_columns = [
-                'Data do Agendamento', 'Horário', 'Nome do Paciente', 'Convênio', 
-                'Evento', 'Profissional', 'Especialidade', 'Telefone', 'Status do Agendamento'
-            ]
+            expected_columns = ['Data do Agendamento', 'Horário', 'Nome do Paciente', 'Convênio', 'Evento', 'Profissional', 'Especialidade', 'Telefone', 'Status do Agendamento']
             for col in expected_columns:
                 if col not in df.columns:
                     st.error(f"Erro Crítico: A coluna '{col}' não foi encontrada na sua tabela do Baserow.")
                     return pd.DataFrame()
-
-            column_mapping = {
-                'Data do Agendamento': 'scheduled_date', 'Horário': 'time',
-                'Nome do Paciente': 'name', 'Convênio': 'insurance',
-                'Evento': 'event', 'Profissional': 'professional',
-                'Especialidade': 'category', 'Telefone': 'phone',
-                'Status do Agendamento': 'status'
-            }
+            column_mapping = {'Data do Agendamento': 'scheduled_date', 'Horário': 'time', 'Nome do Paciente': 'name', 'Convênio': 'insurance', 'Evento': 'event', 'Profissional': 'professional', 'Especialidade': 'category', 'Telefone': 'phone', 'Status do Agendamento': 'status'}
             df.rename(columns=column_mapping, inplace=True)
-            
             df['scheduled_date'] = pd.to_datetime(df['scheduled_date'], dayfirst=True, errors='coerce').dt.date
             df.dropna(subset=['scheduled_date'], inplace=True)
             return df
-
         except Exception as e:
             st.error(f"Ocorreu um erro ao buscar os dados do Baserow: {e}")
             return pd.DataFrame()
 
+    # Funções para CRUD de templates locais
+    DATA_DIR = "data"
+    TEMPLATES_FILE = os.path.join(DATA_DIR, "message_templates.csv")
+
+    def load_templates():
+        if not os.path.exists(DATA_DIR):
+            os.makedirs(DATA_DIR)
+        if not os.path.exists(TEMPLATES_FILE):
+            return pd.DataFrame(columns=["area", "message"])
+        return pd.read_csv(TEMPLATES_FILE)
+
+    def save_templates(df):
+        df.to_csv(TEMPLATES_FILE, index=False)
+
+    # --- INICIALIZAÇÃO E CARGA DE DADOS ---
     load_dotenv()
     BASEROW_KEY = os.getenv("BASEROW_KEY")
     df = get_confirmation_data_from_baserow(BASEROW_KEY)
+    templates_df = load_templates()
 
     # --- INICIALIZAÇÃO DO SESSION STATE ---
     if 'conf_start_date' not in st.session_state:
@@ -1164,79 +1172,146 @@ def confirmation_page():
         st.session_state.conf_patient_filter = "Todos"
         st.session_state.conf_insurance_filter = "Todos"
         st.session_state.conf_event_filter = "Todos"
+        st.session_state.conf_search_term = ""
         st.session_state.show_preview_dialog = False
+        st.session_state.show_send_confirmation = False
+        st.session_state.template_area = ""
+        st.session_state.show_view_template_dialog = False
+        st.session_state.template_to_view = None
 
-    # --- LÓGICA DE FILTRAGEM (executada antes para que filtered_df esteja disponível para o dialog) ---
+    if 'message_template' not in st.session_state:
+        st.session_state.message_template = "Olá {$primeiro_nome}! Sua consulta está agendada para o dia {$data}, às {$horario}, com Dr. {$profissional}. Se não puder comparecer, por favor, avise com antecedência."
+
+    # --- LÓGICA DE FILTRAGEM ---
     filtered_df = df.copy()
     if not df.empty:
         if st.session_state.conf_start_date > st.session_state.conf_end_date:
             st.error("A data inicial não pode ser posterior à data final.")
-            # Evita que o dataframe filtrado fique vazio indevidamente
             filtered_df = pd.DataFrame() 
         else:
-            filtered_df = filtered_df[(filtered_df['scheduled_date'] >= st.session_state.conf_start_date) & (filtered_df['scheduled_date'] <= st.session_state.conf_end_date)]
+            date_mask = (filtered_df['scheduled_date'] >= st.session_state.conf_start_date) & (filtered_df['scheduled_date'] <= st.session_state.conf_end_date)
+            filtered_df = filtered_df[date_mask]
             if st.session_state.conf_prof_filter != "Todos": filtered_df = filtered_df[filtered_df['professional'] == st.session_state.conf_prof_filter]
             if st.session_state.conf_cat_filter != "Todos": filtered_df = filtered_df[filtered_df['category'] == st.session_state.conf_cat_filter]
             if st.session_state.conf_status_filter != "Todos": filtered_df = filtered_df[filtered_df['status'] == st.session_state.conf_status_filter]
             if st.session_state.conf_patient_filter != "Todos": filtered_df = filtered_df[filtered_df['name'] == st.session_state.conf_patient_filter]
             if st.session_state.conf_insurance_filter != "Todos": filtered_df = filtered_df[filtered_df['insurance'] == st.session_state.conf_insurance_filter]
             if st.session_state.conf_event_filter != "Todos": filtered_df = filtered_df[filtered_df['event'] == st.session_state.conf_event_filter]
+            if st.session_state.conf_search_term:
+                filtered_df = filtered_df[filtered_df['name'].str.contains(st.session_state.conf_search_term, case=False, na=False)]
 
-    # --- [CORRIGIDO] DIÁLOGO DE PREVIEW ---
+    # --- DIÁLOGOS ---
+    @st.dialog("Visualizar Template")
+    def view_template_dialog(area, message):
+        st.subheader(f"Template: {area}")
+        st.markdown("---")
+        st.text_area("Conteúdo:", value=message, height=200, disabled=True, key="template_view_content")
+        st.markdown("---")
+        
+        btn_col1, btn_col2 = st.columns(2)
+
+        with btn_col1:
+            if st.button("Copiar Mensagem", use_container_width=True):
+                st.toast("📋 Texto pronto para ser copiado da caixa acima!")
+
+        with btn_col2:
+            if st.button("Fechar", use_container_width=True, type="primary"):
+                st.session_state.show_view_template_dialog = False
+                st.session_state.template_to_view = None
+                st.rerun()
+
     @st.dialog("Preview da Mensagem")
     def preview_dialog():
         message_template = st.session_state.get('message_template', "Olá, {$primeiro_nome}!")
-        
         if 'edited_df' in st.session_state and not st.session_state.edited_df.empty:
             selected_patients_df = st.session_state.edited_df[st.session_state.edited_df['Selecionar']]
-            
             if selected_patients_df.empty:
                 st.warning("Nenhum paciente selecionado para visualizar.")
             else:
-                # Pega a primeira linha da tabela de exibição que foi selecionada
                 first_selected_row_display = selected_patients_df.iloc[0]
-                
-                # Usa o índice dessa linha para encontrar os dados completos no dataframe original filtrado
                 original_index = first_selected_row_display.name
                 full_data_row = filtered_df.loc[original_index]
-
                 st.markdown(f"**Para: {full_data_row['name']}**")
-                
-                # Popula as variáveis usando os dados completos e corretos
-                preview_message = message_template
-                preview_message = preview_message.replace('{$primeiro_nome}', str(full_data_row['name']).split(' ')[0])
-                preview_message = preview_message.replace('{$modalidade}', str(full_data_row['category']))
-                preview_message = preview_message.replace('{$horario}', str(full_data_row['time']))
-                preview_message = preview_message.replace('{$data}', full_data_row['scheduled_date'].strftime('%d/%m/%Y'))
-                preview_message = preview_message.replace('{$profissional}', str(full_data_row['professional']))
-                
-                st.markdown(f"""
-                <div style="background-color: #e9f7ef; padding: 10px; border-radius: 5px; color: #155724; margin-bottom: 15px">
-                    {preview_message}
-                </div>
-                """, unsafe_allow_html=True)
+                preview_message = message_template.replace('{$primeiro_nome}', str(full_data_row['name']).split(' ')[0]).replace('{$modalidade}', str(full_data_row['category'])).replace('{$horario}', str(full_data_row['time'])).replace('{$data}', full_data_row['scheduled_date'].strftime('%d/%m/%Y')).replace('{$profissional}', str(full_data_row['professional']))
+                st.markdown(f'<div style="background-color: #e9f7ef; padding: 10px; border-radius: 5px; color: #155724; margin-bottom: 15px">{preview_message}</div>', unsafe_allow_html=True)
         else:
             st.warning("Não há dados de agendamento para visualizar.")
-
         if st.button("Fechar", use_container_width=True, key="close_preview"):
             st.session_state.show_preview_dialog = False
             st.rerun()
 
-    # --- SEÇÃO DE FILTROS ---
-    st.subheader("Filtros de Agendamento")
-    with st.container(border=True):
+    @st.dialog("Confirmar Envio")
+    def confirm_send_dialog(selected_count):
+        st.warning(f"Você tem certeza que deseja enviar a mensagem para {selected_count} paciente(s) selecionado(s)?")
+        
+        col1, col2 = st.columns(2)
+        if col1.button("Sim, Enviar Agora", type="primary", use_container_width=True):
+            selected_contacts_df = st.session_state.edited_df[st.session_state.edited_df['Selecionar']]
+            message_to_send = st.session_state.get('message_template', "")
+            selected_indices = selected_contacts_df.index
+            full_data_of_selected = filtered_df.loc[selected_indices]
+            full_data_of_selected['scheduled_date'] = full_data_of_selected['scheduled_date'].astype(str)
+            contacts_payload = full_data_of_selected.to_dict(orient='records')
+            final_payload = {"message_template": message_to_send, "contacts": contacts_payload}
+            WEBHOOK_URL = "https://webhook.erudieto.com.br/webhook/disparo-em-massa"
+            
+            with st.spinner(f"Enviando {len(contacts_payload)} mensagens..."):
+                try:
+                    response = requests.post(WEBHOOK_URL, json=final_payload, timeout=30)
+                    if 200 <= response.status_code < 300:
+                        st.success(f"✅ Sucesso! A automação foi acionada para {len(contacts_payload)} contatos.")
+                    else:
+                        st.error(f"❌ Falha ao enviar. O servidor respondeu com: {response.status_code} - {response.text}")
+                except requests.exceptions.RequestException as e:
+                    st.error(f"❌ Erro de conexão ao tentar acionar o webhook: {e}")
+            
+            st.session_state.show_send_confirmation = False
+            st.rerun()
+
+        if col2.button("Cancelar", use_container_width=True):
+            st.session_state.show_send_confirmation = False
+            st.rerun()
+
+    # --- SEÇÃO DE FILTROS RETRÁTIL ---
+    with st.expander("🔍 Filtros de Agendamento", expanded=True):
+        search_col, btns_col = st.columns([3, 1.2])
+        search_col.text_input(
+            "Buscar paciente por nome:", 
+            key="conf_search_term", 
+            placeholder="Digite o nome do paciente para buscar..."
+        )
+        
+        with btns_col:
+            b1, b2 = st.columns(2)
+            def clear_confirmation_filters():
+                st.session_state.conf_start_date = date.today()
+                st.session_state.conf_end_date = date.today() + timedelta(days=7)
+                st.session_state.conf_prof_filter = "Todos"
+                st.session_state.conf_cat_filter = "Todos"
+                st.session_state.conf_status_filter = "Todos"
+                st.session_state.conf_patient_filter = "Todos"
+                st.session_state.conf_insurance_filter = "Todos"
+                st.session_state.conf_event_filter = "Todos"
+                st.session_state.conf_search_term = ""
+            b1.button("Limpar", on_click=clear_confirmation_filters, use_container_width=True, help="Limpar todos os filtros")
+            
+            if b2.button("Atualizar", use_container_width=True, help="Atualizar dados da página"):
+                st.rerun()
+        
+        st.divider()
+
         date_col1, date_col2 = st.columns(2)
         date_col1.date_input("Data Inicial:", key="conf_start_date")
         date_col2.date_input("Data Final:", key="conf_end_date")
 
-        f_col1, f_col2, f_col3 = st.columns(3)
         if not df.empty:
+            f_col1, f_col2, f_col3 = st.columns(3)
             f_col1.selectbox("Profissionais", ["Todos"] + sorted(df['professional'].unique().tolist()), key="conf_prof_filter")
             f_col2.selectbox("Categorias", ["Todos"] + sorted(df['category'].unique().tolist()), key="conf_cat_filter")
             f_col3.selectbox("Status", ["Todos"] + sorted(df['status'].unique().tolist()), key="conf_status_filter")
             
             f_col4, f_col5, f_col6 = st.columns(3)
-            f_col4.selectbox("Pacientes", ["Todos"] + sorted(df['name'].unique().tolist()), key="conf_patient_filter")
+            f_col4.selectbox("Pacientes (lista completa)", ["Todos"] + sorted(df['name'].unique().tolist()), key="conf_patient_filter")
             f_col5.selectbox("Convênios", ["Todos"] + sorted(df['insurance'].unique().tolist()), key="conf_insurance_filter")
             f_col6.selectbox("Eventos", ["Todos"] + sorted(df['event'].unique().tolist()), key="conf_event_filter")
 
@@ -1273,7 +1348,6 @@ def confirmation_page():
             'professional': 'Profissional', 'status': 'Status', 'phone': 'Telefone'
         }, inplace=True)
 
-        # Lógica robusta para resetar as seleções quando os filtros mudam
         if 'edited_df' not in st.session_state or not st.session_state.edited_df.index.equals(base_df.index):
             base_df.insert(0, 'Selecionar', False)
             st.session_state.edited_df = base_df
@@ -1303,74 +1377,90 @@ def confirmation_page():
 
     # --- LAYOUT DE AÇÕES E TEMPLATE ---
     st.write("---")
+    
     with st.container(border=True):
         st.subheader("📋 Template e Envio de Mensagem")
         st.caption("Configure a mensagem que será enviada aos pacientes selecionados na tabela acima.")
         
-        message = st.text_area(
-            "Mensagem:", 
-            "Olá, {$primeiro_nome}! Confirmando seu agendamento de {$modalidade} para o dia {$data} às {$horario}. Atenciosamente, COFRAT.",
-            height=120,
-            key='message_template'
+        content = st.text_area(
+            "Mensagem:",
+            value=st.session_state.message_template,
+            height=200,
+            key='message_template_input'
         )
-        st.markdown("""
-        **Variáveis:** `{$primeiro_nome}`, `{$modalidade}`, `{$horario}`, `{$data}`, `{$profissional}`
-        """, unsafe_allow_html=True)
+        st.session_state.message_template = content
+
+        st.text_input("Área/Categoria do Template:", key="template_area")
         
+        st.markdown("**Variáveis:** `{$primeiro_nome}`, `{$modalidade}`, `{$horario}`, `{$data}`, `{$profissional}`")
         st.write("")
-        btn_cols = st.columns(2)
-        btn_cols[0].button("Visualizar Preview", use_container_width=True, on_click=lambda: st.session_state.update(show_preview_dialog=True))
+
+        btn_cols = st.columns(3)
+        
+        if btn_cols[0].button("Salvar Template", use_container_width=True):
+            if st.session_state.template_area and st.session_state.message_template:
+                new_template = pd.DataFrame([{"area": st.session_state.template_area, "message": st.session_state.message_template}])
+                updated_templates_df = pd.concat([templates_df, new_template], ignore_index=True)
+                save_templates(updated_templates_df)
+                st.toast("Template salvo com sucesso!")
+                st.rerun()
+            else:
+                st.warning("Preencha a Área e a Mensagem para salvar o template.")
+
+        btn_cols[1].button("Visualizar Preview", use_container_width=True, on_click=lambda: st.session_state.update(show_preview_dialog=True))
         
         selected_count = int(st.session_state.edited_df['Selecionar'].sum()) if 'edited_df' in st.session_state and not st.session_state.edited_df.empty else 0
         
-        # --- [NOVA FUNCIONALIDADE] BOTÃO DE ENVIO ---
-        if btn_cols[1].button(f"✉️ Enviar Mensagens ({selected_count})", use_container_width=True, type="primary"):
-            # 1. Filtrar contatos selecionados
-            selected_contacts_df = st.session_state.edited_df[st.session_state.edited_df['Selecionar']]
-
-            if selected_contacts_df.empty:
-                st.warning("Nenhum paciente selecionado para o envio.")
+        if btn_cols[2].button(f"✉️ Enviar Mensagens ({selected_count})", use_container_width=True, type="primary"):
+            if selected_count > 0:
+                st.session_state.show_send_confirmation = True
+                st.rerun()
             else:
-                # 2. Obter a mensagem
-                message_to_send = st.session_state.get('message_template', "")
-                
-                # 3. Preparar os dados para o webhook
-                # Usar o índice do `edited_df` para buscar os dados completos no `filtered_df`
-                selected_indices = selected_contacts_df.index
-                full_data_of_selected = filtered_df.loc[selected_indices]
-                
-                # Converter a data para string para ser compatível com JSON
-                full_data_of_selected['scheduled_date'] = full_data_of_selected['scheduled_date'].astype(str)
-                
-                contacts_payload = full_data_of_selected.to_dict(orient='records')
-                
-                final_payload = {
-                    "message_template": message_to_send,
-                    "contacts": contacts_payload
-                }
-                
-                # 4. Enviar para o Webhook
-                # ================================================================= #
-                # ================================================================= #
-                WEBHOOK_URL = "https://webhook.erudieto.com.br/webhook/disparo-em-massa"
-                # ================================================================= #
-                # ================================================================= #
+                st.warning("Nenhum paciente selecionado para o envio.")
 
-                if not WEBHOOK_URL:
-                    st.error("A URL do webhook não foi configurada. Por favor, adicione a URL no código.")
-                else:
-                    with st.spinner(f"Enviando {len(contacts_payload)} mensagens..."):
-                        try:
-                            response = requests.post(WEBHOOK_URL, json=final_payload, timeout=30)
-                            if response.status_code >= 200 and response.status_code < 300:
-                                st.success(f"✅ Sucesso! A automação foi acionada para {len(contacts_payload)} contatos.")
-                            else:
-                                st.error(f"❌ Falha ao enviar. O servidor respondeu com: {response.status_code} - {response.text}")
-                        except requests.exceptions.RequestException as e:
-                            st.error(f"❌ Erro de conexão ao tentar acionar o webhook: {e}")
+    st.divider()
 
+    st.subheader("Templates Salvos")
+    st.caption("Visualize ou delete mensagens pré-definidas.")
+    
+    if not templates_df.empty:
+        # [MODIFICADO] Layout alterado para 3 colunas
+        template_cols = st.columns(3)
+        for index, row in templates_df.iterrows():
+            with template_cols[index % 3]:
+                with st.container(border=True):
+                    st.markdown(f"**Área:** {row['area']}")
+                    # [MODIFICADO] Mensagem exibida dentro de um bloco de código para melhor formatação
+                    st.code(row['message'], language=None)
+                    
+                    btn_col1, btn_col2 = st.columns(2)
+                    
+                    if btn_col1.button("Visualizar", key=f"view_{index}", use_container_width=True):
+                        st.session_state.template_to_view = row.to_dict()
+                        st.session_state.show_view_template_dialog = True
+                        st.rerun()
+                    
+                    if btn_col2.button("Deletar", key=f"del_{index}", use_container_width=True):
+                        updated_templates_df = templates_df.drop(index)
+                        save_templates(updated_templates_df)
+                        st.toast(f"Template '{row['area']}' deletado!")
+                        st.rerun()
+    else:
+        st.info("Nenhum template salvo ainda. Crie um acima para começar.")
+
+
+    # --- Execução dos diálogos ---
     if st.session_state.get('show_preview_dialog', False):
         preview_dialog()
+    
+    if st.session_state.get('show_send_confirmation', False):
+        selected_count = int(st.session_state.edited_df['Selecionar'].sum())
+        confirm_send_dialog(selected_count)
+
+    if st.session_state.get('show_view_template_dialog', False):
+        template_data = st.session_state.get('template_to_view')
+        if template_data:
+            view_template_dialog(area=template_data['area'], message=template_data['message'])
 
 # --- PÁGINA DE PACIENTES ---
 def patients_page():

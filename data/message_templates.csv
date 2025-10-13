@@ -1,0 +1,15 @@
+area,message
+Ortopedista,"Olá {$primeiro_nome}!
+
+Sua consulta está agendada para o dia {$data} , às {$data}, com {$profissional} (Ortopedista).
+Caso não possa comparecer, pedimos a gentileza de avisar com antecedência.
+
+Atenciosamente,
+Equipe COFRAT"
+Ortopedista,"Olá {$primeiro_nome}!
+
+Sua consulta está agendada para o dia {$data} , às {$horario}, com {$profissional} (Ortopedista).
+Caso não possa comparecer, pedimos a gentileza de avisar com antecedência.
+
+Atenciosamente,
+Equipe COFRAT"
