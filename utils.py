@@ -105,11 +105,11 @@ def create_metric_card(label, value, delta, delta_color):
 def create_summary_card(label, value):
     return f'<div class="summary-card"><div class="summary-card-value">{value}</div><div class="summary-card-label">{label}</div></div>'
 
-# --- PÁGINA INICIAL (DASHBOARD COM NOVAS ANÁLISES) ---
+# --- PÁGINA INICIAL (DASHBOARD COM CARD DE PACIENTES ÚNICOS) ---
 def home_page():
     """
-    Exibe um dashboard dinâmico com filtros de período, métricas de performance
-    e novas visualizações focadas em tendências diárias e padrões semanais.
+    Exibe um dashboard estável e informativo, com uma linha adicional de cards
+    numéricos, incluindo o total de pacientes únicos no período.
     """
     st.markdown("""
     <div class="custom-title-container">
@@ -129,9 +129,7 @@ def home_page():
     def load_data_from_baserow():
         df = get_daily_agenda_from_baserow(BASEROW_KEY)
         if not df.empty:
-            # Convertendo para datetime para manipulação
-            df['scheduled_date_dt'] = pd.to_datetime(df['scheduled_date'])
-            df['scheduled_date'] = df['scheduled_date_dt'].dt.date
+            df['scheduled_date'] = pd.to_datetime(df['scheduled_date']).dt.date
         return df
 
     df = load_data_from_baserow()
@@ -173,7 +171,7 @@ def home_page():
         st.info(f"Nenhum agendamento encontrado para o período de {start_date.strftime('%d/%m/%Y')} a {end_date.strftime('%d/%m/%Y')}.")
         return
 
-    # --- CÁLCULO DAS MÉTRICAS DE INSIGHT ---
+    # --- CÁLCULO DAS MÉTRICAS DE INSIGHT (KPIs) ---
     total_agendamentos = len(df_filtered)
     confirmados = len(df_filtered[df_filtered['status'] == 'Confirmado'])
     cancelados = len(df_filtered[df_filtered['status'] == 'Cancelado'])
@@ -194,29 +192,21 @@ def home_page():
 
     st.divider()
 
-    # --- [NOVA ANÁLISE] VISUALIZAÇÕES DE TENDÊNCIAS E PADRÕES ---
-    chart_cols = st.columns(2, gap="large")
+    # --- RESUMO OPERACIONAL COM CARDS ---
+    st.markdown("#### Resumo Operacional do Período")
+    
+    # Cálculos para os novos cards
+    pendentes = len(df_filtered[df_filtered['status'] == 'Pendente'])
+    
+    # [NOVO CARD] Calcula o número de pacientes únicos (contando nomes distintos)
+    pacientes_unicos = df_filtered['name'].nunique()
 
-    with chart_cols[0]:
-        st.subheader("Evolução Diária dos Agendamentos")
-        # Agrupa por data e status, conta, e depois transforma os status em colunas
-        evolucao_diaria = df_filtered.groupby(['scheduled_date', 'status']).size().unstack(fill_value=0)
-        st.area_chart(evolucao_diaria)
-
-    with chart_cols[1]:
-        st.subheader("Distribuição de Status por Dia da Semana")
-        # Cria uma coluna com o dia da semana (0=Segunda, 6=Domingo)
-        df_copy = df_filtered.copy()
-        df_copy['day_of_week'] = df_copy['scheduled_date_dt'].dt.dayofweek
-        
-        # Agrupa por dia da semana e status
-        status_por_dia = df_copy.groupby(['day_of_week', 'status']).size().unstack(fill_value=0)
-        
-        # Mapeia os números para nomes de dias para melhor visualização
-        dias_semana_map = {0: 'Seg', 1: 'Ter', 2: 'Qua', 3: 'Qui', 4: 'Sex', 5: 'Sáb', 6: 'Dom'}
-        status_por_dia = status_por_dia.rename(index=dias_semana_map).reindex(dias_semana_map.values())
-        
-        st.bar_chart(status_por_dia)
+    # Exibição da nova linha de cards
+    summary_cols = st.columns(4)
+    summary_cols[0].markdown(create_summary_card("Confirmados", f"{confirmados}"), unsafe_allow_html=True)
+    summary_cols[1].markdown(create_summary_card("Pendentes", f"{pendentes}"), unsafe_allow_html=True)
+    summary_cols[2].markdown(create_summary_card("Cancelados", f"{cancelados}"), unsafe_allow_html=True)
+    summary_cols[3].markdown(create_summary_card("Pacientes Únicos", f"{pacientes_unicos}"), unsafe_allow_html=True)
 
 # --- PÁGINA DE APROVAÇÃO ---
 def get_sample_appointments():
