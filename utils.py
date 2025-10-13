@@ -1322,7 +1322,52 @@ def confirmation_page():
         btn_cols[0].button("Visualizar Preview", use_container_width=True, on_click=lambda: st.session_state.update(show_preview_dialog=True))
         
         selected_count = int(st.session_state.edited_df['Selecionar'].sum()) if 'edited_df' in st.session_state and not st.session_state.edited_df.empty else 0
-        btn_cols[1].button(f"✉️ Enviar Mensagens ({selected_count})", use_container_width=True, type="primary")
+        
+        # --- [NOVA FUNCIONALIDADE] BOTÃO DE ENVIO ---
+        if btn_cols[1].button(f"✉️ Enviar Mensagens ({selected_count})", use_container_width=True, type="primary"):
+            # 1. Filtrar contatos selecionados
+            selected_contacts_df = st.session_state.edited_df[st.session_state.edited_df['Selecionar']]
+
+            if selected_contacts_df.empty:
+                st.warning("Nenhum paciente selecionado para o envio.")
+            else:
+                # 2. Obter a mensagem
+                message_to_send = st.session_state.get('message_template', "")
+                
+                # 3. Preparar os dados para o webhook
+                # Usar o índice do `edited_df` para buscar os dados completos no `filtered_df`
+                selected_indices = selected_contacts_df.index
+                full_data_of_selected = filtered_df.loc[selected_indices]
+                
+                # Converter a data para string para ser compatível com JSON
+                full_data_of_selected['scheduled_date'] = full_data_of_selected['scheduled_date'].astype(str)
+                
+                contacts_payload = full_data_of_selected.to_dict(orient='records')
+                
+                final_payload = {
+                    "message_template": message_to_send,
+                    "contacts": contacts_payload
+                }
+                
+                # 4. Enviar para o Webhook
+                # ================================================================= #
+                # ================================================================= #
+                WEBHOOK_URL = "https://n8n.erudieto.com.br/webhook-test/disparo-em-massa"  # <<< INSIRA SUA URL DE WEBHOOK AQUI
+                # ================================================================= #
+                # ================================================================= #
+
+                if not WEBHOOK_URL:
+                    st.error("A URL do webhook não foi configurada. Por favor, adicione a URL no código.")
+                else:
+                    with st.spinner(f"Enviando {len(contacts_payload)} mensagens..."):
+                        try:
+                            response = requests.post(WEBHOOK_URL, json=final_payload, timeout=30)
+                            if response.status_code >= 200 and response.status_code < 300:
+                                st.success(f"✅ Sucesso! A automação foi acionada para {len(contacts_payload)} contatos.")
+                            else:
+                                st.error(f"❌ Falha ao enviar. O servidor respondeu com: {response.status_code} - {response.text}")
+                        except requests.exceptions.RequestException as e:
+                            st.error(f"❌ Erro de conexão ao tentar acionar o webhook: {e}")
 
     if st.session_state.get('show_preview_dialog', False):
         preview_dialog()
@@ -1394,8 +1439,6 @@ def chatwoot_page():
                     st.error(f"❌ Ocorreu um erro de conexão ao tentar acionar o webhook: {e}")
                     st.warning("Verifique se a URL do webhook está correta e se o seu fluxo no n8n está ativo.")
 
-# Remova a importação de 'streamlit_antd_components' se ela existir.
-# import streamlit_antd_components as sac
 
 # --- LÓGICA PRINCIPAL DO APLICATIVO (LOGADO) COM MENU st.radio ---
 def main_app(logo_path):
