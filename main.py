@@ -8,7 +8,7 @@ LOGO_EXTENDED_PATH = "./images/cofrat-logotipo.png"
 
 # --- CONFIGURAÇÃO DA PÁGINA ---
 st.set_page_config(
-    page_title="COFRAT - Plataforma de Gestão",
+    page_title="Plataforma de Gestão dos Atendimentos",
     page_icon=LOGO_SYMBOL_PATH,
     layout="wide",
     initial_sidebar_state="expanded"

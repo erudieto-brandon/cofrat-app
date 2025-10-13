@@ -305,8 +305,7 @@ def fetch_metadata_from_db(supabase_client):
 
 def get_daily_agenda_from_baserow(api_key):
     """
-    Busca TODOS os dados da agenda da API do Baserow, tratando a paginação
-    e informando sobre registros descartados por inconsistência nos dados.
+    Busca TODOS os dados da agenda da API do Baserow, incluindo a coluna 'Status do Agendamento'.
     """
     if not api_key:
         st.error("A chave da API do Baserow (BASEROW_KEY) não foi configurada nos segredos do ambiente.")
@@ -321,9 +320,7 @@ def get_daily_agenda_from_baserow(api_key):
             response = requests.get(url, headers=headers)
             response.raise_for_status()
             data = response.json()
-            page_results = data.get('results', [])
-            if page_results:
-                all_rows.extend(page_results)
+            all_rows.extend(data.get('results', []))
             url = data.get('next')
 
         if not all_rows:
@@ -331,11 +328,11 @@ def get_daily_agenda_from_baserow(api_key):
             return pd.DataFrame()
 
         df = pd.DataFrame(all_rows)
-        initial_row_count = len(df)
 
+        # --- [MODIFICADO] Adicionada a coluna 'Status do Agendamento' ---
         expected_baserow_columns = [
             'Data do Agendamento', 'Horário', 'Nome do Paciente', 'Convênio', 
-            'Evento', 'Profissional', 'Especialidade'
+            'Evento', 'Profissional', 'Especialidade', 'Status do Agendamento'
         ]
         
         for col in expected_baserow_columns:
@@ -343,6 +340,7 @@ def get_daily_agenda_from_baserow(api_key):
                 st.error(f"Erro Crítico: A coluna '{col}' não foi encontrada na sua tabela do Baserow. Verifique se o nome da coluna está exatamente correto.")
                 return pd.DataFrame()
 
+        # --- [MODIFICADO] Mapeamento da nova coluna para 'status' ---
         column_mapping = {
             'Data do Agendamento': 'scheduled_date',
             'Horário': 'time',
@@ -350,29 +348,16 @@ def get_daily_agenda_from_baserow(api_key):
             'Convênio': 'insurance',
             'Evento': 'event', 
             'Profissional': 'professional',
-            'Especialidade': 'category'
+            'Especialidade': 'category',
+            'Status do Agendamento': 'status' # Mapeia a coluna do Baserow para a coluna 'status' do DataFrame
         }
         df.rename(columns=column_mapping, inplace=True)
-
-        df['status'] = 'Pendente'
         
-        # --- MODIFICAÇÃO: Tratamento e verificação da perda de dados ---
-        # 1. Converte a data, transformando formatos inválidos em 'NaT' (Not a Time).
+        # Remove a linha que definia um status padrão, pois agora ele vem do Baserow
+        # df['status'] = 'Pendente' 
+        
         df['scheduled_date'] = pd.to_datetime(df['scheduled_date'], dayfirst=True, errors='coerce')
-        
-        # 2. Remove as linhas onde a data resultou em 'NaT'.
         df.dropna(subset=['scheduled_date'], inplace=True)
-        
-        # 3. Compara a contagem de linhas antes e depois da limpeza.
-        final_row_count = len(df)
-
-        # --- FIM DA MODIFICAÇÃO ---
-
-        required_cols = ['name', 'scheduled_date', 'professional', 'category', 'status']
-        for col in required_cols:
-            if col not in df.columns:
-                st.error(f"A coluna esperada '{col}' não foi encontrada após o mapeamento. Verifique o dicionário 'column_mapping'.")
-                return pd.DataFrame(columns=required_cols)
 
         return df
 
@@ -399,19 +384,15 @@ def clear_filters_callback():
 # --- PÁGINAS ---
 # --- PÁGINA DA AGENDA DO DIA ---
 def daily_schedule_page():
-    """Exibe a agenda do dia com filtros e funcionalidade de upload para o Supabase, com delay após o upload."""
+    """Exibe a agenda do dia com filtros e funcionalidade de upload para o Supabase, utilizando o status real do Baserow."""
     
-    # --- INICIALIZAÇÃO DO ESTADO DO CONTADOR ---
     if 'countdown_active' not in st.session_state:
         st.session_state.countdown_active = False
     if 'countdown_timer' not in st.session_state:
         st.session_state.countdown_timer = 0
-    
-    # --- NOVO: Inicialização do estado para rastrear extrações pendentes ---
     if 'extraction_status' not in st.session_state:
         st.session_state.extraction_status = {}
 
-    # Conexão com o Supabase e obtenção da chave Baserow
     load_dotenv()
     try:
         supabase_url = os.getenv("SUPABASE_URL")
@@ -425,12 +406,10 @@ def daily_schedule_page():
         st.error(f"Ocorreu um erro ao inicializar a conexão com o Supabase: {e}")
         st.stop()
 
-    # --- GERENCIAMENTO DO DATAFRAME DE ARQUIVOS A PARTIR DO DB ---
     if 'files_df' not in st.session_state:
         with st.spinner("Buscando metadados dos arquivos..."):
             st.session_state.files_df = fetch_metadata_from_db(supabase)
 
-    # --- SEÇÃO DE FILTROS E TABELA DE AGENDAMENTOS ---
     st.subheader("Filtros")
     if "view_mode" not in st.session_state:
         st.session_state.view_mode = "Semana"
@@ -439,7 +418,6 @@ def daily_schedule_page():
         st.session_state.cat_filter = "Todos"
         st.session_state.status_filter = "Todos"
         st.session_state.search_term = ""
-        # Inicialização dos novos filtros
         st.session_state.patient_filter = "Todos"
         st.session_state.insurance_filter = "Todos"
         st.session_state.event_filter = "Todos"
@@ -456,22 +434,15 @@ def daily_schedule_page():
             col1.radio("Visualização:", ["Dia", "Semana", "Mês", "Trimestre", "Todo o período"], horizontal=True, key="view_mode", index=4)
             col2.date_input("Data:", key="selected_date", disabled=(st.session_state.view_mode == "Todo o período"))
             
-            # Linha de filtros expandida para 6 colunas
             f_col1, f_col2, f_col3, f_col4, f_col5, f_col6 = st.columns(6)
             f_col1.selectbox("Profissionais", ["Todos"] + sorted(df['professional'].unique().tolist()), key="prof_filter")
             f_col2.selectbox("Categorias", ["Todos"] + sorted(df['category'].unique().tolist()), key="cat_filter")
             
-            # Garante que as opções de status sempre incluam as novas categorias
-            existing_statuses = sorted(df['status'].unique().tolist())
-            required_statuses = ["Pendente", "Reagendado", "Cancelado"]
-            all_statuses = sorted(list(set(existing_statuses + required_statuses)))
-            status_options = ["Todos"] + all_statuses
+            # --- [MODIFICADO] O filtro de status agora é populado com os valores reais do Baserow ---
+            status_options = ["Todos"] + sorted(df['status'].unique().tolist())
             f_col3.selectbox("Status", status_options, key="status_filter")
             
-            # Filtro de pacientes habilitado e populado
             f_col4.selectbox("Pacientes", ["Todos"] + sorted(df['name'].unique().tolist()), key="patient_filter")
-            
-            # Novos filtros adicionados
             f_col5.selectbox("Convênios", ["Todos"] + sorted(df['insurance'].unique().tolist()), key="insurance_filter")
             f_col6.selectbox("Eventos", ["Todos"] + sorted(df['event'].unique().tolist()), key="event_filter")
 
@@ -489,15 +460,12 @@ def daily_schedule_page():
             filtered_df = filtered_df[filtered_df['category'] == st.session_state.cat_filter]
         if st.session_state.status_filter != "Todos":
             filtered_df = filtered_df[filtered_df['status'] == st.session_state.status_filter]
-        
-        # Lógica de filtro para os novos campos
         if st.session_state.patient_filter != "Todos":
             filtered_df = filtered_df[filtered_df['name'] == st.session_state.patient_filter]
         if st.session_state.insurance_filter != "Todos":
             filtered_df = filtered_df[filtered_df['insurance'] == st.session_state.insurance_filter]
         if st.session_state.event_filter != "Todos":
             filtered_df = filtered_df[filtered_df['event'] == st.session_state.event_filter]
-
         if st.session_state.search_term:
             filtered_df = filtered_df[filtered_df['name'].str.contains(st.session_state.search_term, case=False, na=False)]
         
@@ -508,18 +476,17 @@ def daily_schedule_page():
         else:
             st.header(f"Agendamentos de {start_date.strftime('%d/%m/%Y')} até {end_date.strftime('%d/%m/%Y')}")
         
-        # Cálculo das contagens para todas as categorias
+        # As contagens agora refletem os status reais vindos do Baserow
         total_agendamentos = len(filtered_df)
         confirmados = len(filtered_df[filtered_df['status'] == 'Confirmado'])
         pendentes = len(filtered_df[filtered_df['status'] == 'Pendente'])
         reagendados = len(filtered_df[filtered_df['status'] == 'Reagendado'])
         cancelados = len(filtered_df[filtered_df['status'] == 'Cancelado'])
         
-        # Exibição das contagens com as novas categorias e cores
         st.markdown(f"""
             <div style="display: flex; align-items: center; gap: 20px; font-size: 1.1rem; margin-bottom: 15px;">
                 <span><i class="bi bi-people-fill"></i> <b>{total_agendamentos}</b> agendamentos</span>
-                <span style="color: #28a745;"><b>{confirmados}</b> confirmadas</span>
+                <span style="color: #28a745;"><b>{confirmados}</b> confirmados</span>
                 <span style="color: darkorange;"><b>{pendentes}</b> pendentes</span>
                 <span style="color: #007bff;"><b>{reagendados}</b> reagendados</span>
                 <span style="color: #6c757d;"><b>{cancelados}</b> cancelados</span>
@@ -1097,144 +1064,239 @@ def confirmation_queue_page():
         if st.session_state.show_reschedule_dialog:
             reschedule_dialog()
 
-# --- PÁGINA DE CONFIRMAÇÃO DE AGENDAMENTOS ---
+# --- [AJUSTADA] PÁGINA DE CONFIRMAÇÃO DE AGENDAMENTOS ---
 def confirmation_page():
+    """
+    Exibe a página de confirmação em massa com filtros avançados, resumo de dados e preview corrigido.
+    """
     st.write('##### Comunicação em massa para agendamentos')
-    st.write('Esta página permite confirmar ou cancelar agendamentos em massa, especialmente útil em casos de indisponibilidade de agenda dos profissionais. Agilize a comunicação com os pacientes de forma rápida e organizada.')
+    st.write('Esta página permite confirmar ou cancelar agendamentos em massa. Use os filtros para selecionar um período e refinar a lista de pacientes antes de enviar as comunicações.')
     st.write('')
 
-    # --- DIÁLOGO DE PREVIEW (definido antes para poder ser chamado) ---
+    # --- CONEXÃO COM BASEROW E BUSCA DE DADOS ---
+    def get_confirmation_data_from_baserow(api_key):
+        if not api_key:
+            st.error("A chave da API do Baserow (BASEROW_KEY) não foi configurada.")
+            return pd.DataFrame()
+
+        url = "https://api.baserow.io/api/database/rows/table/681080/?user_field_names=true&size=200"
+        headers = {"Authorization": f"Token {api_key}"}
+        all_rows = []
+
+        try:
+            while url:
+                response = requests.get(url, headers=headers)
+                response.raise_for_status()
+                data = response.json()
+                all_rows.extend(data.get('results', []))
+                url = data.get('next')
+
+            if not all_rows:
+                return pd.DataFrame()
+
+            df = pd.DataFrame(all_rows)
+            
+            expected_columns = [
+                'Data do Agendamento', 'Horário', 'Nome do Paciente', 'Convênio', 
+                'Evento', 'Profissional', 'Especialidade', 'Telefone', 'Status do Agendamento'
+            ]
+            for col in expected_columns:
+                if col not in df.columns:
+                    st.error(f"Erro Crítico: A coluna '{col}' não foi encontrada na sua tabela do Baserow.")
+                    return pd.DataFrame()
+
+            column_mapping = {
+                'Data do Agendamento': 'scheduled_date', 'Horário': 'time',
+                'Nome do Paciente': 'name', 'Convênio': 'insurance',
+                'Evento': 'event', 'Profissional': 'professional',
+                'Especialidade': 'category', 'Telefone': 'phone',
+                'Status do Agendamento': 'status'
+            }
+            df.rename(columns=column_mapping, inplace=True)
+            
+            df['scheduled_date'] = pd.to_datetime(df['scheduled_date'], dayfirst=True, errors='coerce').dt.date
+            df.dropna(subset=['scheduled_date'], inplace=True)
+            return df
+
+        except Exception as e:
+            st.error(f"Ocorreu um erro ao buscar os dados do Baserow: {e}")
+            return pd.DataFrame()
+
+    load_dotenv()
+    BASEROW_KEY = os.getenv("BASEROW_KEY")
+    df = get_confirmation_data_from_baserow(BASEROW_KEY)
+
+    # --- INICIALIZAÇÃO DO SESSION STATE ---
+    if 'conf_start_date' not in st.session_state:
+        st.session_state.conf_start_date = date.today()
+        st.session_state.conf_end_date = date.today() + timedelta(days=7)
+        st.session_state.conf_prof_filter = "Todos"
+        st.session_state.conf_cat_filter = "Todos"
+        st.session_state.conf_status_filter = "Todos"
+        st.session_state.conf_patient_filter = "Todos"
+        st.session_state.conf_insurance_filter = "Todos"
+        st.session_state.conf_event_filter = "Todos"
+        st.session_state.show_preview_dialog = False
+
+    # --- LÓGICA DE FILTRAGEM (executada antes para que filtered_df esteja disponível para o dialog) ---
+    filtered_df = df.copy()
+    if not df.empty:
+        if st.session_state.conf_start_date > st.session_state.conf_end_date:
+            st.error("A data inicial não pode ser posterior à data final.")
+            # Evita que o dataframe filtrado fique vazio indevidamente
+            filtered_df = pd.DataFrame() 
+        else:
+            filtered_df = filtered_df[(filtered_df['scheduled_date'] >= st.session_state.conf_start_date) & (filtered_df['scheduled_date'] <= st.session_state.conf_end_date)]
+            if st.session_state.conf_prof_filter != "Todos": filtered_df = filtered_df[filtered_df['professional'] == st.session_state.conf_prof_filter]
+            if st.session_state.conf_cat_filter != "Todos": filtered_df = filtered_df[filtered_df['category'] == st.session_state.conf_cat_filter]
+            if st.session_state.conf_status_filter != "Todos": filtered_df = filtered_df[filtered_df['status'] == st.session_state.conf_status_filter]
+            if st.session_state.conf_patient_filter != "Todos": filtered_df = filtered_df[filtered_df['name'] == st.session_state.conf_patient_filter]
+            if st.session_state.conf_insurance_filter != "Todos": filtered_df = filtered_df[filtered_df['insurance'] == st.session_state.conf_insurance_filter]
+            if st.session_state.conf_event_filter != "Todos": filtered_df = filtered_df[filtered_df['event'] == st.session_state.conf_event_filter]
+
+    # --- [CORRIGIDO] DIÁLOGO DE PREVIEW ---
     @st.dialog("Preview da Mensagem")
     def preview_dialog():
-        message_template = st.session_state.get('message_template', "Olá, {$primeiro_nome}! Confirmando seu agendamento de {$modalidade} para amanhã às {$horario}. Atenciosamente, COFRAT.")
-        selected_patients_df = st.session_state.edited_df[st.session_state.edited_df['Selecionar']]
+        message_template = st.session_state.get('message_template', "Olá, {$primeiro_nome}!")
+        
+        if 'edited_df' in st.session_state and not st.session_state.edited_df.empty:
+            selected_patients_df = st.session_state.edited_df[st.session_state.edited_df['Selecionar']]
+            
+            if selected_patients_df.empty:
+                st.warning("Nenhum paciente selecionado para visualizar.")
+            else:
+                # Pega a primeira linha da tabela de exibição que foi selecionada
+                first_selected_row_display = selected_patients_df.iloc[0]
+                
+                # Usa o índice dessa linha para encontrar os dados completos no dataframe original filtrado
+                original_index = first_selected_row_display.name
+                full_data_row = filtered_df.loc[original_index]
 
-        if selected_patients_df.empty:
-            st.warning("Nenhum paciente selecionado para visualizar.")
+                st.markdown(f"**Para: {full_data_row['name']}**")
+                
+                # Popula as variáveis usando os dados completos e corretos
+                preview_message = message_template
+                preview_message = preview_message.replace('{$primeiro_nome}', str(full_data_row['name']).split(' ')[0])
+                preview_message = preview_message.replace('{$modalidade}', str(full_data_row['category']))
+                preview_message = preview_message.replace('{$horario}', str(full_data_row['time']))
+                preview_message = preview_message.replace('{$data}', full_data_row['scheduled_date'].strftime('%d/%m/%Y'))
+                preview_message = preview_message.replace('{$profissional}', str(full_data_row['professional']))
+                
+                st.markdown(f"""
+                <div style="background-color: #e9f7ef; padding: 10px; border-radius: 5px; color: #155724; margin-bottom: 15px">
+                    {preview_message}
+                </div>
+                """, unsafe_allow_html=True)
         else:
-            for _, row in selected_patients_df.iterrows():
-                with st.container(border=True):
-                    st.markdown(f"**Para: {row['Paciente']}**")
-                    
-                    preview_message = message_template.replace('{$primeiro_nome}', str(row['Paciente']).split(' ')[0])
-                    preview_message = preview_message.replace('{$modalidade}', str(row['Modalidade']))
-                    preview_message = preview_message.replace('{$horario}', str(row['Horário']))
-                    
-                    # CSS CORRIGIDO: Removido margin-top negativo para evitar que o box saia do container.
-                    st.markdown(f"""
-                    <div style="background-color: #e9f7ef; padding: 10px; border-radius: 5px; color: #155724; margin-top: -5px; margin-bottom: 15px">
-                        {preview_message}
-                    </div>
-                    """, unsafe_allow_html=True)
+            st.warning("Não há dados de agendamento para visualizar.")
 
-        if st.button("Fechar", width='stretch', key="close_preview"):
+        if st.button("Fechar", use_container_width=True, key="close_preview"):
             st.session_state.show_preview_dialog = False
             st.rerun()
 
-    # --- INICIALIZAÇÃO DO SESSION STATE ---
-    if 'show_preview_dialog' not in st.session_state:
-        st.session_state.show_preview_dialog = False
-        
-    if 'edited_df' not in st.session_state:
-        data = {
-            'Selecionar': [True, True, True, True, True],
-            'Paciente': ['Maria Silva Santos', 'João Carlos Oliveira', 'Ana Beatriz Costa', 'Pedro Lima Silva', 'Fernanda Costa'],
-            'Horário': ['08:00', '08:30', '09:00', '09:30', '10:00'],
-            'Modalidade': ['Fisioterapia', 'Ortopedia', 'Fisioterapia Infantil', 'Fisioterapia', 'Ortopedia'],
-            'Profissional': ['Dra. Liliane', 'Dr. Roberto', 'Dra. Marina', 'Dra. Liliane', 'Dr. Roberto'],
-            'Status': ['Confirmado', 'Confirmado', 'Confirmado', 'Pendente', 'Confirmado'],
-            'Telefone': ['(11) 99999-9999', '(11) 88888-8888', '(11) 77777-7777', '(11) 66666-6666', '(11) 55555-5555']
-        }
-        st.session_state.edited_df = pd.DataFrame(data)
+    # --- SEÇÃO DE FILTROS ---
+    st.subheader("Filtros de Agendamento")
+    with st.container(border=True):
+        date_col1, date_col2 = st.columns(2)
+        date_col1.date_input("Data Inicial:", key="conf_start_date")
+        date_col2.date_input("Data Final:", key="conf_end_date")
 
-    # --- NOVO LAYOUT DA PÁGINA EM DUAS COLUNAS ---
-    left_col, right_col = st.columns([1, 2])
-
-    with left_col:
-        with st.container(border=True):
-            st.subheader("🗓️ Selecionar Data")
-            st.caption("Escolha o dia para visualizar os agendamentos")
+        f_col1, f_col2, f_col3 = st.columns(3)
+        if not df.empty:
+            f_col1.selectbox("Profissionais", ["Todos"] + sorted(df['professional'].unique().tolist()), key="conf_prof_filter")
+            f_col2.selectbox("Categorias", ["Todos"] + sorted(df['category'].unique().tolist()), key="conf_cat_filter")
+            f_col3.selectbox("Status", ["Todos"] + sorted(df['status'].unique().tolist()), key="conf_status_filter")
             
-            selected_date = st.date_input(
-                "Selecione o dia", 
-                date(2025, 9, 13),
-                label_visibility="collapsed"
-            )
-            
-            st.markdown(f"""
-            <div style="background-color: #f0f2f6; padding: 10px; border-radius: 5px; margin-top: 10px; margin-bottom: 10px">
-                Data selecionada: <b>{selected_date.strftime('%d/%m/%Y')}</b>
-            </div>
-            """, unsafe_allow_html=True)
+            f_col4, f_col5, f_col6 = st.columns(3)
+            f_col4.selectbox("Pacientes", ["Todos"] + sorted(df['name'].unique().tolist()), key="conf_patient_filter")
+            f_col5.selectbox("Convênios", ["Todos"] + sorted(df['insurance'].unique().tolist()), key="conf_insurance_filter")
+            f_col6.selectbox("Eventos", ["Todos"] + sorted(df['event'].unique().tolist()), key="conf_event_filter")
 
-    with right_col:
-        with st.container(border=True):
-            st.subheader("📋 Template de Mensagem")
-            st.caption("Configure a mensagem que será enviada aos pacientes")
-            
-            message = st.text_area(
-                "Mensagem:", 
-                "Olá, {$primeiro_nome}! Confirmando seu agendamento de {$modalidade} para amanhã às {$horario}. Atenciosamente, COFRAT.",
-                height=120,
-                key='message_template'
-            )
+    # --- CABEÇALHO E RESUMO DE AGENDAMENTOS ---
+    st.write("---")
+    start_date_str = st.session_state.conf_start_date.strftime('%d/%m/%Y')
+    end_date_str = st.session_state.conf_end_date.strftime('%d/%m/%Y')
+    st.header(f"Agendamentos de {start_date_str} até {end_date_str}")
 
-            st.markdown("**Variáveis Disponíveis:**")
-            variables_html = """
-            <div style="font-size: 0.9rem; line-height: 1.6;">
-                <b>{$primeiro_nome}</b>: Primeiro nome do paciente<br>
-                <b>{$modalidade}</b>: Tipo de consulta/tratamento<br>
-                <b>{$horario}</b>: Horário do agendamento<br>
-                <b>{$data}</b>: Data do agendamento<br>
-                <b>{$profissional}</b>: Nome do profissional
-            </div>
-            """
-            st.markdown(variables_html, unsafe_allow_html=True)
-            st.write("")
-
-            # PREVIEW DINÂMICO para o primeiro paciente da lista
-            if not st.session_state.edited_df.empty:
-                first_patient = st.session_state.edited_df.iloc[0]
-                current_template = st.session_state.get('message_template', "")
-                
-                preview_text = current_template.replace('{$primeiro_nome}', str(first_patient['Paciente']).split(' ')[0])
-                preview_text = preview_text.replace('{$modalidade}', str(first_patient['Modalidade']))
-                preview_text = preview_text.replace('{$horario}', str(first_patient['Horário']))
-                
-                st.caption("Preview:")
-                st.markdown(f"_{preview_text}_")
-            
-            st.write("")
-
-            selected_count = int(st.session_state.edited_df['Selecionar'].sum())
-            btn_cols = st.columns(2)
-            if btn_cols[0].button("Visualizar Preview", width='stretch'):
-                st.session_state.show_preview_dialog = True
-                st.rerun()
-            
-            btn_cols[1].button(f"✉️ Enviar Mensagens ({selected_count})", width='stretch', type="primary")
+    total_agendamentos = len(filtered_df)
+    confirmados = len(filtered_df[filtered_df['status'] == 'Confirmado'])
+    pendentes = len(filtered_df[filtered_df['status'] == 'Pendente'])
+    reagendados = len(filtered_df[filtered_df['status'] == 'Reagendado'])
+    cancelados = len(filtered_df[filtered_df['status'] == 'Cancelado'])
+    
+    st.markdown(f"""
+        <div style="display: flex; align-items: center; gap: 20px; font-size: 1.1rem; margin-bottom: 15px;">
+            <span><b>{total_agendamentos}</b> agendamentos</span>
+            <span style="color: #28a745;"><b>{confirmados}</b> confirmados</span>
+            <span style="color: darkorange;"><b>{pendentes}</b> pendentes</span>
+            <span style="color: #007bff;"><b>{reagendados}</b> reagendados</span>
+            <span style="color: #6c757d;"><b>{cancelados}</b> cancelados</span>
+        </div>
+    """, unsafe_allow_html=True)
 
     # --- TABELA DE AGENDAMENTOS ---
+    if filtered_df.empty:
+        st.warning("Nenhum agendamento encontrado para os filtros selecionados.")
+        st.session_state.edited_df = pd.DataFrame()
+    else:
+        base_df = filtered_df[['name', 'time', 'category', 'professional', 'status', 'phone']].copy()
+        base_df.rename(columns={
+            'name': 'Paciente', 'time': 'Horário', 'category': 'Modalidade',
+            'professional': 'Profissional', 'status': 'Status', 'phone': 'Telefone'
+        }, inplace=True)
+
+        # Lógica robusta para resetar as seleções quando os filtros mudam
+        if 'edited_df' not in st.session_state or not st.session_state.edited_df.index.equals(base_df.index):
+            base_df.insert(0, 'Selecionar', False)
+            st.session_state.edited_df = base_df
+
+        def toggle_all():
+            new_value = st.session_state.select_all_checkbox
+            df_copy = st.session_state.edited_df.copy()
+            df_copy['Selecionar'] = new_value
+            st.session_state.edited_df = df_copy
+
+        action_col1, action_col2 = st.columns([3, 1])
+        with action_col1:
+            all_selected = all(st.session_state.edited_df['Selecionar']) if not st.session_state.edited_df.empty else False
+            st.checkbox("Selecionar Todos", value=all_selected, on_change=toggle_all, key="select_all_checkbox")
+        with action_col2:
+            if st.button("🔄 Atualizar Tabela", use_container_width=True, help="Recarregar dados do Baserow"):
+                st.rerun()
+
+        edited_df_output = st.data_editor(
+            st.session_state.edited_df,
+            use_container_width=True,
+            hide_index=True,
+            disabled=['Paciente', 'Horário', 'Modalidade', 'Profissional', 'Status', 'Telefone'],
+            key='appointments_editor'
+        )
+        st.session_state.edited_df = edited_df_output
+
+    # --- LAYOUT DE AÇÕES E TEMPLATE ---
     st.write("---")
-    st.subheader(f"Agendamentos do Dia ({selected_date.strftime('%d/%m/%Y')})")
+    with st.container(border=True):
+        st.subheader("📋 Template e Envio de Mensagem")
+        st.caption("Configure a mensagem que será enviada aos pacientes selecionados na tabela acima.")
+        
+        message = st.text_area(
+            "Mensagem:", 
+            "Olá, {$primeiro_nome}! Confirmando seu agendamento de {$modalidade} para o dia {$data} às {$horario}. Atenciosamente, COFRAT.",
+            height=120,
+            key='message_template'
+        )
+        st.markdown("""
+        **Variáveis:** `{$primeiro_nome}`, `{$modalidade}`, `{$horario}`, `{$data}`, `{$profissional}`
+        """, unsafe_allow_html=True)
+        
+        st.write("")
+        btn_cols = st.columns(2)
+        btn_cols[0].button("Visualizar Preview", use_container_width=True, on_click=lambda: st.session_state.update(show_preview_dialog=True))
+        
+        selected_count = int(st.session_state.edited_df['Selecionar'].sum()) if 'edited_df' in st.session_state and not st.session_state.edited_df.empty else 0
+        btn_cols[1].button(f"✉️ Enviar Mensagens ({selected_count})", use_container_width=True, type="primary")
 
-    all_selected = all(st.session_state.edited_df['Selecionar'])
-    def toggle_all():
-        new_value = not all_selected
-        st.session_state.edited_df['Selecionar'] = new_value
-
-    st.checkbox("Selecionar Todos", value=all_selected, on_change=toggle_all, key="select_all_checkbox")
-
-    edited_df = st.data_editor(
-        st.session_state.edited_df,
-        width='stretch',
-        hide_index=True,
-        disabled=['Paciente', 'Horário', 'Modalidade', 'Profissional', 'Status', 'Telefone'],
-        key='appointments_editor'
-    )
-    st.session_state.edited_df = edited_df
-
-    if st.session_state.show_preview_dialog:
+    if st.session_state.get('show_preview_dialog', False):
         preview_dialog()
 
 # --- PÁGINA DE PACIENTES ---
@@ -1268,39 +1330,41 @@ def patients_page():
     st.dataframe(df_patients, width='stretch', hide_index=True)
     st.caption("Ações como editar e excluir podem ser adicionadas ao selecionar uma linha ou através de um menu de contexto em futuras implementações.")
 
-# --- PÁGINA DE RELATÓRIOS ---
-def reports_page():
-    st.title("Relatórios")
-    st.write("Visualize métricas e dados importantes sobre os agendamentos.")
 
-    # Métricas principais
-    kpi_cols = st.columns(4)
-    kpi_cols[0].metric("Consultas no Mês", "245", "+12% vs Mês Anterior")
-    kpi_cols[1].metric("Novos Pacientes", "32", "+5%")
-    kpi_cols[2].metric("Taxa de Confirmação", "93.5%", "1.2%")
-    kpi_cols[3].metric("Taxa de Cancelamento", "4.1%", "-0.5%")
-    
+def chatwoot_page():
+    """
+    Exibe a página de integração com o Chatwoot, permitindo marcar todas as conversas como lidas.
+    """
+    st.title("Chatwoot")
+    st.write("Gerencie ações rápidas para as conversas do Chatwoot diretamente daqui.")
     st.write("---")
 
-    chart_cols = st.columns(2)
-    with chart_cols[0]:
-        st.subheader("Agendamentos por Modalidade")
-        # Dados de exemplo para o gráfico de barras
-        chart_data = pd.DataFrame({
-            "Modalidade": ["Fisioterapia", "Ortopedia", "Fisioterapia Inf.", "Pilates", "Acupuntura"],
-            "Agendamentos": [110, 75, 30, 22, 8],
-        })
-        st.bar_chart(chart_data, x="Modalidade", y="Agendamentos", color="#0b9035")
+    st.subheader("Marcar todas as conversas como lidas")
+    st.write("Clique no botão abaixo para acionar a automação no n8n que marcará todas as conversas pendentes como lidas na sua caixa de entrada do Chatwoot.")
 
-    with chart_cols[1]:
-        st.subheader("Evolução de Novos Pacientes (Últimos 6 Meses)")
-        # Dados de exemplo para o gráfico de linha
-        chart_data_line = pd.DataFrame(
-            np.random.randint(15, 40, size=(6, 1)),
-            columns=['Novos Pacientes'],
-            index=pd.to_datetime(['2025-04-01', '2025-05-01', '2025-06-01', '2025-07-01', '2025-08-01', '2025-09-01'])
-        )
-        st.line_chart(chart_data_line)
+    # Use colunas para centralizar o botão e dar um espaçamento melhor
+    col1, col2, col3 = st.columns([1, 1.5, 1])
+
+    with col2:
+        if st.button("🚀 Marcar todas como lidas", use_container_width=True, type="primary"):
+            # Substitua pela URL real do seu webhook no n8n
+            WEBHOOK_URL = "https://n8n.erudieto.com.br/webhook-test/mark-all-as-read"
+            
+            with st.spinner("Aguarde, acionando o fluxo no n8n..."):
+                try:
+                    # O método POST é geralmente usado para acionar webhooks
+                    response = requests.post(WEBHOOK_URL, timeout=123456)
+                    
+                    # Verifica se a requisição foi bem-sucedida (código 2xx)
+                    if response.status_code >= 200 and response.status_code < 300:
+                        st.success("✅ Fluxo acionado com sucesso! As conversas serão marcadas como lidas em breve.")
+                    else:
+                        st.error(f"❌ Falha ao acionar o fluxo. O n8n retornou o código de status: {response.status_code}")
+                        st.code(response.text, language="text")
+
+                except requests.exceptions.RequestException as e:
+                    st.error(f"❌ Ocorreu um erro de conexão ao tentar acionar o webhook: {e}")
+                    st.warning("Verifique se a URL do webhook está correta e se o seu fluxo no n8n está ativo.")
 
 # --- LÓGICA PRINCIPAL DO APLICATIVO (LOGADO) ---
 def main_app(logo_path):
@@ -1317,7 +1381,8 @@ def main_app(logo_path):
             sac.MenuItem('Administrativo', type='group', children=[
                 sac.MenuItem('Gestão', icon='gear'),
                 sac.MenuItem('Pacientes', icon='people'),
-                sac.MenuItem('Relatórios', icon='clipboard-data'),
+                # --- [MODIFICADO] A página Relatórios foi trocada pela Chatwoot ---
+                sac.MenuItem('Chatwoot', icon='chat'),
             ]),
             sac.MenuItem('Comunicação', type='group', children=[
                 sac.MenuItem('Confirmação', icon='check2-square'),
@@ -1338,7 +1403,8 @@ def main_app(logo_path):
         'Gestão': management_page,
         'Confirmação': confirmation_page,
         'Pacientes': patients_page,
-        'Relatórios': reports_page
+        # --- [MODIFICADO] O mapeamento agora aponta para a nova função chatwoot_page ---
+        'Chatwoot': chatwoot_page
     }
     page_function = page_map.get(selected_page, home_page)
     page_function()
