@@ -1482,40 +1482,55 @@ def patients_page():
     st.caption("Ações como editar e excluir podem ser adicionadas ao selecionar uma linha ou através de um menu de contexto em futuras implementações.")
 
 
-def chatwoot_page():
+def automations_page():
     """
-    Exibe a página de integração com o Chatwoot, permitindo marcar todas as conversas como lidas.
+    Exibe a página de Automações, permitindo acionar fluxos de trabalho externos.
     """
-    st.title("Chatwoot")
-    st.write("Gerencie ações rápidas para as conversas do Chatwoot diretamente daqui.")
-    st.write("---")
+    st.title("Automações")
+    st.write("Gerencie e acione fluxos de trabalho e automações diretamente desta página.")
+    st.divider()
 
-    st.subheader("Marcar todas as conversas como lidas")
-    st.write("Clique no botão abaixo para acionar a automação no n8n que marcará todas as conversas pendentes como lidas na sua caixa de entrada do Chatwoot.")
+    # --- AUTOMAÇÃO 1: MARCAR CONVERSAS COMO LIDAS ---
+    st.subheader("Marcar todas as conversas do Chatwoot como lidas")
+    st.write("Clique no botão abaixo para acionar a automação que marcará todas as conversas pendentes como lidas na sua caixa de entrada do Chatwoot.")
 
-    # Use colunas para centralizar o botão e dar um espaçamento melhor
     col1, col2, col3 = st.columns([1, 1.5, 1])
-
     with col2:
         if st.button("🚀 Marcar todas como lidas", use_container_width=True, type="primary"):
-            # Substitua pela URL real do seu webhook no n8n
-            WEBHOOK_URL = "https://webhook.erudieto.com.br/webhook/mark-all-as-read"
+            WEBHOOK_URL_CHATWOOT = "https://webhook.erudieto.com.br/webhook/mark-all-as-read"
             
             with st.spinner("Aguarde, acionando o fluxo no n8n..."):
                 try:
-                    # O método POST é geralmente usado para acionar webhooks
-                    response = requests.post(WEBHOOK_URL, timeout=123456)
-                    
-                    # Verifica se a requisição foi bem-sucedida (código 2xx)
-                    if response.status_code >= 200 and response.status_code < 300:
+                    response = requests.post(WEBHOOK_URL_CHATWOOT, timeout=30)
+                    if 200 <= response.status_code < 300:
                         st.success("✅ Fluxo acionado com sucesso! As conversas serão marcadas como lidas em breve.")
                     else:
-                        st.error(f"❌ Falha ao acionar o fluxo. O n8n retornou o código de status: {response.status_code}")
+                        st.error(f"❌ Falha ao acionar o fluxo. O servidor retornou o código: {response.status_code}")
                         st.code(response.text, language="text")
-
                 except requests.exceptions.RequestException as e:
                     st.error(f"❌ Ocorreu um erro de conexão ao tentar acionar o webhook: {e}")
-                    st.warning("Verifique se a URL do webhook está correta e se o seu fluxo no n8n está ativo.")
+
+    st.divider()
+
+    # --- AUTOMAÇÃO 2: PADRONIZAR NÚMEROS DE TELEFONE ---
+    st.subheader("Padronizar Números de Telefone na Base de Dados")
+    st.write("Clique no botão abaixo para iniciar a automação que busca e ajusta todos os números de telefone para um formato padronizado (ex: +5531999998888).")
+
+    col4, col5, col6 = st.columns([1, 1.5, 1])
+    with col5:
+        if st.button("🚀 Iniciar Padronização de Telefones", use_container_width=True, type="primary"):
+            WEBHOOK_URL_PHONES = "https://webhook.erudieto.com.br/webhook/transformar-numeros"
+
+            with st.spinner("Aguarde, acionando a automação de telefones..."):
+                try:
+                    response = requests.post(WEBHOOK_URL_PHONES, timeout=30)
+                    if 200 <= response.status_code < 300:
+                        st.success("✅ Automação iniciada com sucesso! Os números de telefone serão padronizados em segundo plano.")
+                    else:
+                        st.error(f"❌ Falha ao acionar a automação. O servidor retornou o código: {response.status_code}")
+                        st.code(response.text, language="text")
+                except requests.exceptions.RequestException as e:
+                    st.error(f"❌ Ocorreu um erro de conexão ao tentar acionar o webhook: {e}")
 
 
 # --- LÓGICA PRINCIPAL DO APLICATIVO (LOGADO) COM MENU st.radio ---
@@ -1536,7 +1551,7 @@ def main_app(logo_path):
             "Agenda do Dia",
             "Gestão",
             "Pacientes",
-            "Chatwoot",
+            "Automações",
             "Confirmação",
             "Suporte"
         ]
@@ -1568,7 +1583,7 @@ def main_app(logo_path):
         'Gestão': management_page,
         'Confirmação': confirmation_page,
         'Pacientes': patients_page,
-        'Chatwoot': chatwoot_page
+        'Automações': automations_page
     }
     
     # Chama a função da página selecionada
