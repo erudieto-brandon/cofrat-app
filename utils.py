@@ -1352,7 +1352,7 @@ def confirmation_page():
                 # 4. Enviar para o Webhook
                 # ================================================================= #
                 # ================================================================= #
-                WEBHOOK_URL = "https://n8n.erudieto.com.br/webhook-test/disparo-em-massa"  # <<< INSIRA SUA URL DE WEBHOOK AQUI
+                WEBHOOK_URL = "https://webhook.erudieto.com.br/webhook/disparo-em-massa"
                 # ================================================================= #
                 # ================================================================= #
 
