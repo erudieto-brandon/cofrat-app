@@ -1428,7 +1428,6 @@ def main_app(logo_path):
         )
         
         st.write("---")
-        st.write(f"Usuário: **{st.session_state.get('username', '')}**")
         if st.button("Logout", use_container_width=True):
             st.session_state["authentication_status"] = False
             st.session_state["username"] = None
