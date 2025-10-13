@@ -1394,49 +1394,47 @@ def chatwoot_page():
                     st.error(f"❌ Ocorreu um erro de conexão ao tentar acionar o webhook: {e}")
                     st.warning("Verifique se a URL do webhook está correta e se o seu fluxo no n8n está ativo.")
 
-# --- LÓGICA PRINCIPAL DO APLICATIVO (LOGADO) ---
+# Remova a importação de 'streamlit_antd_components' se ela existir.
+# import streamlit_antd_components as sac
+
+# --- LÓGICA PRINCIPAL DO APLICATIVO (LOGADO) COM MENU st.radio ---
 def main_app(logo_path):
-    """Renderiza a sidebar e controla o roteamento de páginas com um menu de estilo aprimorado."""
-    
+    """
+    Renderiza a sidebar e controla o roteamento de páginas usando um menu st.radio
+    nativo para garantir máxima estabilidade e compatibilidade.
+    """
     with st.sidebar:
-        # Exibe o logo na sidebar
         display_logo(logo_path, width=110, use_column=False)
         st.write("---")
-        
-        # --- [MODIFICADO] Estilo do menu foi ajustado para uma aparência mais suave ---
-        selected_page = option_menu(
-            menu_title=None,
-            options=["Página Inicial", "Aprovação", "Agenda do Dia", "Gestão", 
-                    "Pacientes", "Chatwoot", "Confirmação", "Suporte"],
-            icons=["house", "card-checklist", "calendar-event", "gear", 
-                   "people", "chat", "check2-square", "whatsapp"],
-            menu_icon="cast",
-            default_index=0,
-            styles={
-                "container": {"padding": "0!important", "background-color": "#fafafa"},
-                "icon": {"color": "#059669", "font-size": "16px"}, 
-                "nav-link": {
-                    "font-size": "14px",
-                    "text-align": "left",
-                    "margin": "0px",
-                    "--hover-color": "#e8f5e9",
-                    "color": "#4b5563"
-                },
-                "nav-link-selected": {
-                    "background-color": "#d1fae5", # Fundo verde claro e suave
-                    "color": "#065f46",           # Texto em verde escuro para contraste
-                    "font-weight": "600"
-                },
-            }
+
+        # --- [MENU SIMPLIFICADO] Substituído por st.radio para máxima estabilidade ---
+        # Lista de todas as páginas disponíveis na aplicação
+        page_options = [
+            "Página Inicial",
+            "Aprovação",
+            "Agenda do Dia",
+            "Gestão",
+            "Pacientes",
+            "Chatwoot",
+            "Confirmação",
+            "Suporte"
+        ]
+
+        # O st.radio agora controla a página selecionada
+        selected_page = st.radio(
+            "Menu de Navegação",  # Rótulo do menu
+            page_options,
+            label_visibility="collapsed" # Oculta o rótulo para um visual mais limpo
         )
         
         st.write("---")
+        st.write(f"Usuário: **{st.session_state.get('username', '')}**")
         if st.button("Logout", use_container_width=True):
             st.session_state["authentication_status"] = False
             st.session_state["username"] = None
             st.rerun()
 
-    # Roteamento de páginas
+    # O roteamento de páginas continua funcionando da mesma forma
     if selected_page == "Suporte":
         st.info("Redirecionando para o WhatsApp...")
         st.markdown("### 📱 Suporte via WhatsApp")
@@ -1453,5 +1451,6 @@ def main_app(logo_path):
         'Chatwoot': chatwoot_page
     }
     
+    # Chama a função da página selecionada
     page_function = page_map.get(selected_page, home_page)
     page_function()
