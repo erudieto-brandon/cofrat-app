@@ -1093,11 +1093,11 @@ def approval_workflow_page():
                         st.rerun()
 
 
-# --- [LAYOUT AJUSTADO 3 COLUNAS] PÁGINA DE CONFIRMAÇÃO DE AGENDAMENTOS ---
+# --- [FORMATAÇÃO AJUSTADA] PÁGINA DE CONFIRMAÇÃO DE AGENDAMENTOS ---
 def confirmation_page():
     """
-    Exibe a página de confirmação em massa com novo layout de 3 colunas para templates, 
-    filtros avançados, CRUD de templates e pop-ups de confirmação.
+    Exibe a página de confirmação em massa com formatação de preview aprimorada, 
+    layout ajustado, filtros e CRUD de templates.
     """
     # --- Importações necessárias ---
     import pandas as pd
@@ -1176,11 +1176,9 @@ def confirmation_page():
         st.session_state.show_preview_dialog = False
         st.session_state.show_send_confirmation = False
         st.session_state.template_area = ""
-        st.session_state.show_view_template_dialog = False
-        st.session_state.template_to_view = None
 
     if 'message_template' not in st.session_state:
-        st.session_state.message_template = "Olá {$primeiro_nome}! Sua consulta está agendada para o dia {$data}, às {$horario}, com Dr. {$profissional}. Se não puder comparecer, por favor, avise com antecedência."
+        st.session_state.message_template = "Olá {$primeiro_nome}!\n\nSua consulta está agendada para o dia {$data}, às {$horario}, com Dr. {$profissional}.\n\nCaso não possa comparecer, por favor, avise com antecedência."
 
     # --- LÓGICA DE FILTRAGEM ---
     filtered_df = df.copy()
@@ -1201,27 +1199,17 @@ def confirmation_page():
                 filtered_df = filtered_df[filtered_df['name'].str.contains(st.session_state.conf_search_term, case=False, na=False)]
 
     # --- DIÁLOGOS ---
-    @st.dialog("Visualizar Template")
-    def view_template_dialog(area, message):
-        st.subheader(f"Template: {area}")
-        st.markdown("---")
-        st.text_area("Conteúdo:", value=message, height=200, disabled=True, key="template_view_content")
-        st.markdown("---")
-        
-        btn_col1, btn_col2 = st.columns(2)
-
-        with btn_col1:
-            if st.button("Copiar Mensagem", use_container_width=True):
-                st.toast("📋 Texto pronto para ser copiado da caixa acima!")
-
-        with btn_col2:
-            if st.button("Fechar", use_container_width=True, type="primary"):
-                st.session_state.show_view_template_dialog = False
-                st.session_state.template_to_view = None
-                st.rerun()
-
     @st.dialog("Preview da Mensagem")
     def preview_dialog():
+        # Função auxiliar para formatar o horário
+        def format_time_for_preview(time_str):
+            try:
+                hour, minute = map(int, time_str.split(':'))
+                rounded_minute = (minute // 10) * 10
+                return f"{hour:02d}:{rounded_minute:02d}"
+            except:
+                return time_str # Retorna o original se houver erro de formato
+
         message_template = st.session_state.get('message_template', "Olá, {$primeiro_nome}!")
         if 'edited_df' in st.session_state and not st.session_state.edited_df.empty:
             selected_patients_df = st.session_state.edited_df[st.session_state.edited_df['Selecionar']]
@@ -1232,8 +1220,22 @@ def confirmation_page():
                 original_index = first_selected_row_display.name
                 full_data_row = filtered_df.loc[original_index]
                 st.markdown(f"**Para: {full_data_row['name']}**")
-                preview_message = message_template.replace('{$primeiro_nome}', str(full_data_row['name']).split(' ')[0]).replace('{$modalidade}', str(full_data_row['category'])).replace('{$horario}', str(full_data_row['time'])).replace('{$data}', full_data_row['scheduled_date'].strftime('%d/%m/%Y')).replace('{$profissional}', str(full_data_row['professional']))
-                st.markdown(f'<div style="background-color: #e9f7ef; padding: 10px; border-radius: 5px; color: #155724; margin-bottom: 15px">{preview_message}</div>', unsafe_allow_html=True)
+
+                # [MODIFICADO] Aplica as novas formatações
+                patient_name = str(full_data_row['name']).split(' ')[0].capitalize()
+                professional_name = str(full_data_row['professional']).title()
+                formatted_time = format_time_for_preview(str(full_data_row['time']))
+
+                preview_message = message_template.replace('{$primeiro_nome}', patient_name)\
+                                                  .replace('{$modalidade}', str(full_data_row['category']))\
+                                                  .replace('{$horario}', formatted_time)\
+                                                  .replace('{$data}', full_data_row['scheduled_date'].strftime('%d/%m/%Y'))\
+                                                  .replace('{$profissional}', professional_name)
+                
+                # [MODIFICADO] Substitui \n por <br> para renderizar quebras de linha
+                html_message = preview_message.replace('\n', '<br>')
+                
+                st.markdown(f'<div style="background-color: #e9f7ef; padding: 10px; border-radius: 5px; color: #155724; margin-bottom: 15px">{html_message}</div>', unsafe_allow_html=True)
         else:
             st.warning("Não há dados de agendamento para visualizar.")
         if st.button("Fechar", use_container_width=True, key="close_preview"):
@@ -1385,7 +1387,7 @@ def confirmation_page():
         content = st.text_area(
             "Mensagem:",
             value=st.session_state.message_template,
-            height=200,
+            height=250,
             key='message_template_input'
         )
         st.session_state.message_template = content
@@ -1421,33 +1423,24 @@ def confirmation_page():
     st.divider()
 
     st.subheader("Templates Salvos")
-    st.caption("Visualize ou delete mensagens pré-definidas.")
+    st.caption("Delete mensagens pré-definidas.")
     
     if not templates_df.empty:
-        # [MODIFICADO] Layout alterado para 3 colunas
         template_cols = st.columns(3)
         for index, row in templates_df.iterrows():
             with template_cols[index % 3]:
                 with st.container(border=True):
                     st.markdown(f"**Área:** {row['area']}")
-                    # [MODIFICADO] Mensagem exibida dentro de um bloco de código para melhor formatação
                     st.code(row['message'], language=None)
                     
-                    btn_col1, btn_col2 = st.columns(2)
-                    
-                    if btn_col1.button("Visualizar", key=f"view_{index}", use_container_width=True):
-                        st.session_state.template_to_view = row.to_dict()
-                        st.session_state.show_view_template_dialog = True
-                        st.rerun()
-                    
-                    if btn_col2.button("Deletar", key=f"del_{index}", use_container_width=True):
+                    # [MODIFICADO] Botão Deletar agora ocupa a largura total
+                    if st.button("Deletar", key=f"del_{index}", use_container_width=True):
                         updated_templates_df = templates_df.drop(index)
                         save_templates(updated_templates_df)
                         st.toast(f"Template '{row['area']}' deletado!")
                         st.rerun()
     else:
         st.info("Nenhum template salvo ainda. Crie um acima para começar.")
-
 
     # --- Execução dos diálogos ---
     if st.session_state.get('show_preview_dialog', False):
@@ -1456,11 +1449,6 @@ def confirmation_page():
     if st.session_state.get('show_send_confirmation', False):
         selected_count = int(st.session_state.edited_df['Selecionar'].sum())
         confirm_send_dialog(selected_count)
-
-    if st.session_state.get('show_view_template_dialog', False):
-        template_data = st.session_state.get('template_to_view')
-        if template_data:
-            view_template_dialog(area=template_data['area'], message=template_data['message'])
 
 # --- PÁGINA DE PACIENTES ---
 def patients_page():
