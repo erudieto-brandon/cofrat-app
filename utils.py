@@ -499,12 +499,13 @@ def clear_filters_callback():
 def daily_schedule_page():
     """Exibe a agenda do dia com filtros e funcionalidade de upload para o Supabase, utilizando o status real do Baserow."""
     
-    if 'countdown_active' not in st.session_state:
-        st.session_state.countdown_active = False
-    if 'countdown_timer' not in st.session_state:
-        st.session_state.countdown_timer = 0
+    # Inicialização de session_state
     if 'extraction_status' not in st.session_state:
         st.session_state.extraction_status = {}
+    if 'files_df' not in st.session_state:
+        st.session_state.files_df = None
+    if 'last_upload_time' not in st.session_state:
+        st.session_state.last_upload_time = None
 
     load_dotenv()
     try:
@@ -519,11 +520,14 @@ def daily_schedule_page():
         st.error(f"Ocorreu um erro ao inicializar a conexão com o Supabase: {e}")
         st.stop()
 
-    if 'files_df' not in st.session_state:
-        with st.spinner("Buscando metadados dos arquivos..."):
+    # Carrega metadados apenas uma vez
+    if st.session_state.files_df is None:
+        with st.spinner("Carregando metadados dos arquivos..."):
             st.session_state.files_df = fetch_metadata_from_db(supabase)
 
     st.subheader("Filtros")
+    
+    # Inicialização dos filtros (apenas uma vez)
     if "view_mode" not in st.session_state:
         st.session_state.view_mode = "Semana"
         st.session_state.selected_date = date.today()
@@ -551,7 +555,6 @@ def daily_schedule_page():
             f_col1.selectbox("Profissionais", ["Todos"] + sorted(df['professional'].unique().tolist()), key="prof_filter")
             f_col2.selectbox("Categorias", ["Todos"] + sorted(df['category'].unique().tolist()), key="cat_filter")
             
-            # --- [MODIFICADO] O filtro de status agora é populado com os valores reais do Baserow ---
             status_options = ["Todos"] + sorted(df['status'].unique().tolist())
             f_col3.selectbox("Status", status_options, key="status_filter")
             
@@ -561,10 +564,12 @@ def daily_schedule_page():
 
             search_col, btn_col = st.columns([4, 1.08])
             search_col.text_input("Buscar paciente...", placeholder="Buscar paciente...", label_visibility="collapsed", key="search_term")
-            btn_col.button("Limpar Filtros", width='stretch', on_click=clear_filters_callback)
+            btn_col.button("Limpar Filtros", on_click=clear_filters_callback)
         
+        # Aplicação dos filtros
         start_date, end_date = get_date_range(st.session_state.selected_date, st.session_state.view_mode)
         filtered_df = df
+        
         if st.session_state.view_mode != "Todo o período":
             filtered_df = df[(df['scheduled_date'] >= start_date) & (df['scheduled_date'] <= end_date)]
         if st.session_state.prof_filter != "Todos":
@@ -582,6 +587,7 @@ def daily_schedule_page():
         if st.session_state.search_term:
             filtered_df = filtered_df[filtered_df['name'].str.contains(st.session_state.search_term, case=False, na=False)]
         
+        # Cabeçalho
         if st.session_state.view_mode == "Dia":
             st.header(f"Agendamentos para {st.session_state.selected_date.strftime('%d/%m/%Y')}")
         elif st.session_state.view_mode == "Todo o período":
@@ -589,7 +595,7 @@ def daily_schedule_page():
         else:
             st.header(f"Agendamentos de {start_date.strftime('%d/%m/%Y')} até {end_date.strftime('%d/%m/%Y')}")
         
-        # As contagens agora refletem os status reais vindos do Baserow
+        # Estatísticas
         total_agendamentos = len(filtered_df)
         confirmados = len(filtered_df[filtered_df['status'] == 'Confirmado'])
         pendentes = len(filtered_df[filtered_df['status'] == 'Pendente'])
@@ -606,6 +612,7 @@ def daily_schedule_page():
             </div>
         """, unsafe_allow_html=True)
         
+        # Exibição da tabela
         display_df = filtered_df.copy()
         display_df['scheduled_date'] = pd.to_datetime(display_df['scheduled_date']).dt.strftime('%d/%m/%Y')
         display_columns_order = ['scheduled_date', 'time', 'name', 'insurance', 'event', 'status']
@@ -623,103 +630,108 @@ def daily_schedule_page():
         st.dataframe(display_df, hide_index=True)
         st.markdown('</div>', unsafe_allow_html=True)
     
-    # --- LÓGICA DE UPLOAD PARA O SUPABASE (STORAGE + DATABASE) ---
-    if not st.session_state.countdown_active:
-        uploaded_files = st.file_uploader(
-            "Arraste e solte os arquivos aqui",
-            type="pdf",
-            accept_multiple_files=True
-        )
+    # --- UPLOAD DE ARQUIVOS (SEM CONTADOR) ---
+    st.write("---")
+    
+    uploaded_files = st.file_uploader(
+        "Arraste e solte os arquivos aqui",
+        type="pdf",
+        accept_multiple_files=True,
+        key="file_uploader"
+    )
 
-        if uploaded_files:
-            any_success = False
-            for uploaded_file in uploaded_files:
+    if uploaded_files:
+        upload_button = st.button("📤 Fazer Upload dos Arquivos", type="primary", use_container_width=True)
+        
+        if upload_button:
+            success_count = 0
+            error_count = 0
+            duplicate_count = 0
+            
+            progress_bar = st.progress(0)
+            status_text = st.empty()
+            
+            for idx, uploaded_file in enumerate(uploaded_files):
                 file_name_with_date = f"{date.today().strftime('%Y-%m-%d')}_{uploaded_file.name}"
                 file_path_in_bucket = f"pdfs-agendamento/{file_name_with_date}"
                 
+                status_text.text(f"Processando {idx + 1}/{len(uploaded_files)}: {uploaded_file.name}")
+                
                 try:
-                    with st.spinner(f'Enviando "{uploaded_file.name}" para o Storage...'):
-                        supabase.storage.from_("cofrat").upload(
-                            path=file_path_in_bucket,
-                            file=uploaded_file.getvalue(),
-                            file_options={"content-type": "application/pdf"}
-                        )
+                    # Upload para o Storage
+                    supabase.storage.from_("cofrat").upload(
+                        path=file_path_in_bucket,
+                        file=uploaded_file.getvalue(),
+                        file_options={"content-type": "application/pdf"}
+                    )
                     
-                    with st.spinner(f'Registrando "{uploaded_file.name}" no banco de dados...'):
-                        supabase.table('pdf_metadata').insert({
-                            'data_upload': date.today().isoformat(),
-                            'nome_arquivo': file_name_with_date,
-                            'info_extraida': 'Não'
-                        }).execute()
+                    # Registro no banco de dados
+                    supabase.table('pdf_metadata').insert({
+                        'data_upload': date.today().isoformat(),
+                        'nome_arquivo': file_name_with_date,
+                        'info_extraida': 'Não'
+                    }).execute()
 
-                    st.success(f'✅ Arquivo "{uploaded_file.name}" processado com sucesso!')
-                    any_success = True
+                    success_count += 1
 
                 except Exception as e:
-                    if "Duplicate" in str(e):
-                         st.warning(f'⚠️ O arquivo "{uploaded_file.name}" já existe no storage ou no banco de dados.')
-                         any_success = True
+                    if "Duplicate" in str(e) or "already exists" in str(e).lower():
+                        duplicate_count += 1
                     else:
-                        st.error(f'❌ Ocorreu um erro no processo de upload: {e}')
-
-            if any_success:
-                st.session_state.countdown_active = True
-                st.session_state.countdown_timer = 5
+                        error_count += 1
+                        st.error(f'❌ Erro ao processar "{uploaded_file.name}": {e}')
+                
+                progress_bar.progress((idx + 1) / len(uploaded_files))
+            
+            # Limpa a barra de progresso
+            progress_bar.empty()
+            status_text.empty()
+            
+            # Mensagem de resultado
+            if success_count > 0:
+                st.success(f'✅ {success_count} arquivo(s) enviado(s) com sucesso!')
+            if duplicate_count > 0:
+                st.warning(f'⚠️ {duplicate_count} arquivo(s) já existia(m) no sistema.')
+            if error_count > 0:
+                st.error(f'❌ {error_count} arquivo(s) com erro no upload.')
+            
+            # Atualiza a lista de arquivos apenas se houve sucesso
+            if success_count > 0 or duplicate_count > 0:
+                st.session_state.files_df = fetch_metadata_from_db(supabase)
+                st.session_state.last_upload_time = time.time()
                 st.rerun()
 
-    # --- BLOCO DO CONTADOR (DELAY) ---
-    if st.session_state.countdown_active:
-        timer = st.session_state.countdown_timer
-
-        if timer > 0:
-            countdown_placeholder = st.empty()
-            with countdown_placeholder.container():
-                st.info(f"🔄 Processamento concluído. Atualizando a lista em {timer} segundos...")
-
-            time.sleep(1)
-            st.session_state.countdown_timer -= 1
-            st.rerun()
-
-        else:
-            st.session_state.countdown_active = False
-            with st.spinner("Atualizando lista de arquivos..."):
-                st.session_state.files_df = fetch_metadata_from_db(supabase)
-            st.rerun()
-
-    # --- LISTA DE STATUS DE UPLOAD (LENDO DO DATAFRAME DO DB) ---
+    # --- LISTA DE ARQUIVOS ---
     st.write("---")
     
     col_header1, col_header2 = st.columns([3, 1])
     with col_header1:
         st.subheader("Status da Extração de Arquivos")
     with col_header2:
-        is_any_extraction_pending = any(status == 'pending' for status in st.session_state.extraction_status.values())
         if st.button("🔄 Atualizar Lista", use_container_width=True):
-            with st.spinner("Buscando metadados dos arquivos..."):
-                st.session_state.files_df = fetch_metadata_from_db(supabase)
-                for file_id, status in list(st.session_state.extraction_status.items()):
-                    if status == 'pending':
-                        if not st.session_state.files_df[st.session_state.files_df['id'] == file_id].empty and \
-                           st.session_state.files_df[st.session_state.files_df['id'] == file_id]['extracted'].iloc[0] == 'Sim':
-                            del st.session_state.extraction_status[file_id]
+            st.session_state.files_df = fetch_metadata_from_db(supabase)
+            # Limpa status de extração para arquivos já extraídos
+            for file_id in list(st.session_state.extraction_status.keys()):
+                if not st.session_state.files_df[st.session_state.files_df['id'] == file_id].empty:
+                    if st.session_state.files_df[st.session_state.files_df['id'] == file_id]['extracted'].iloc[0] == 'Sim':
+                        del st.session_state.extraction_status[file_id]
             st.rerun()
 
     files_df = st.session_state.files_df
     if files_df.empty:
         st.info("Nenhum metadado de arquivo encontrado no banco de dados.")
     else:
-        # --- [LAYOUT MELHORADO] ---
         with st.container(border=True):
-            # Cabeçalho da "tabela"
+            # Cabeçalho
             header_cols = st.columns([2, 4, 2, 3])
             header_cols[0].markdown("**Data de upload**")
             header_cols[1].markdown("**Nome do arquivo**")
             header_cols[2].markdown("**Info Extraída**")
             header_cols[3].markdown("<div style='text-align: center;'><b>Ações</b></div>", unsafe_allow_html=True)
 
-            # Linhas da "tabela"
+            # Linhas
             for index, row in files_df.iterrows():
-                st.divider() # Adiciona uma linha divisória entre os registros
+                st.divider()
                 col1, col2, col3, col4 = st.columns([2, 4, 2, 3])
                 
                 col1.write(datetime.strptime(row['upload_date'], '%Y-%m-%d').strftime('%d/%m/%Y'))
@@ -736,7 +748,7 @@ def daily_schedule_page():
                 
                 with col4:
                     btn_cols = st.columns(2)
-                    is_disabled = st.session_state.countdown_active or current_extraction_status == 'pending'
+                    is_disabled = current_extraction_status == 'pending'
 
                     if row['extracted'] != 'Sim' and current_extraction_status != 'pending':
                         if btn_cols[0].button("Extrair", key=f"extract_{row['id']}", use_container_width=True, disabled=is_disabled):
@@ -745,21 +757,20 @@ def daily_schedule_page():
                             
                             st.session_state.extraction_status[row['id']] = 'pending'
                             
-                            with st.spinner(f"Acionando automação para '{row['file_name']}'..."):
-                                try:
-                                    response = requests.post(WEBHOOK_URL, json=payload, timeout=5)
-                                    
-                                    if response.status_code in [200, 202]:
-                                        st.success(f"Extração para '{row['file_name']}' iniciada. O status será atualizado em breve.")
-                                        st.rerun()
-                                    else:
-                                        st.error(f"Falha ao iniciar extração (código {response.status_code}): {response.text}")
-                                        st.session_state.extraction_status[row['id']] = 'failed'
-                                        st.rerun()
-                                except requests.exceptions.RequestException as e:
-                                    st.error(f"Erro de conexão com o webhook: {e}")
+                            try:
+                                response = requests.post(WEBHOOK_URL, json=payload, timeout=5)
+                                
+                                if response.status_code in [200, 202]:
+                                    st.success(f"✅ Extração iniciada para '{row['file_name']}'")
+                                    st.rerun()
+                                else:
+                                    st.error(f"❌ Falha ao iniciar extração (código {response.status_code})")
                                     st.session_state.extraction_status[row['id']] = 'failed'
                                     st.rerun()
+                            except requests.exceptions.RequestException as e:
+                                st.error(f"❌ Erro de conexão: {e}")
+                                st.session_state.extraction_status[row['id']] = 'failed'
+                                st.rerun()
                     elif current_extraction_status == 'pending':
                         btn_cols[0].markdown('<div style="text-align: center; color: darkorange; font-size: 0.85em;">Extraindo...</div>', unsafe_allow_html=True)
                     else:
@@ -769,6 +780,7 @@ def daily_schedule_page():
                         st.session_state.file_to_delete = row
                         st.rerun()
 
+    # --- MODAL DE CONFIRMAÇÃO DE DELEÇÃO ---
     if 'file_to_delete' in st.session_state and st.session_state.file_to_delete is not None:
         file_info = st.session_state.file_to_delete
         
@@ -777,24 +789,27 @@ def daily_schedule_page():
             st.warning(f"Você tem certeza que deseja deletar permanentemente o arquivo **{file_info['file_name']}**?")
             st.write("Esta ação removerá o arquivo do armazenamento e seu registro do banco de dados. Não pode ser desfeita.")
             
-            if st.button("Sim, deletar agora", type="primary"):
+            col1, col2 = st.columns(2)
+            
+            if col1.button("✅ Sim, deletar", type="primary", use_container_width=True):
                 try:
                     supabase.storage.from_("cofrat").remove([f"pdfs-agendamento/{file_info['file_name']}"])
                     supabase.table('pdf_metadata').delete().eq('id', file_info['id']).execute()
                     
-                    st.success("Arquivo deletado com sucesso!")
+                    st.success("✅ Arquivo deletado com sucesso!")
                     st.session_state.file_to_delete = None
                     st.session_state.files_df = fetch_metadata_from_db(supabase)
                     if file_info['id'] in st.session_state.extraction_status:
                         del st.session_state.extraction_status[file_info['id']]
+                    time.sleep(0.5)
                     st.rerun()
 
                 except Exception as e:
-                    st.error(f"Erro ao deletar o arquivo: {e}")
+                    st.error(f"❌ Erro ao deletar: {e}")
                     st.session_state.file_to_delete = None
                     st.rerun()
 
-            if st.button("Cancelar"):
+            if col2.button("❌ Cancelar", use_container_width=True):
                 st.session_state.file_to_delete = None
                 st.rerun()
         
@@ -1526,6 +1541,28 @@ def automations_page():
                     response = requests.post(WEBHOOK_URL_PHONES, timeout=30)
                     if 200 <= response.status_code < 300:
                         st.success("✅ Automação iniciada com sucesso! Os números de telefone serão padronizados em segundo plano.")
+                    else:
+                        st.error(f"❌ Falha ao acionar a automação. O servidor retornou o código: {response.status_code}")
+                        st.code(response.text, language="text")
+                except requests.exceptions.RequestException as e:
+                    st.error(f"❌ Ocorreu um erro de conexão ao tentar acionar o webhook: {e}")
+
+    st.divider()
+
+    # --- AUTOMAÇÃO 3: DELETAR AGORA ---
+    st.subheader("Deletar Agora")
+    st.write("Clique no botão abaixo para acionar a automação de deleção. Esta ação executará o processo de limpeza conforme configurado no webhook.")
+
+    col7, col8, col9 = st.columns([1, 1.5, 1])
+    with col8:
+        if st.button("🗑️ Deletar Agora", use_container_width=True, type="primary"):
+            WEBHOOK_URL_DELETE = "https://webhook.erudieto.com.br/webhook/delete"
+
+            with st.spinner("Aguarde, acionando a automação de deleção..."):
+                try:
+                    response = requests.post(WEBHOOK_URL_DELETE, timeout=30)
+                    if 200 <= response.status_code < 300:
+                        st.success("✅ Automação de deleção iniciada com sucesso! O processo será executado em segundo plano.")
                     else:
                         st.error(f"❌ Falha ao acionar a automação. O servidor retornou o código: {response.status_code}")
                         st.code(response.text, language="text")
