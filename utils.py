@@ -525,11 +525,18 @@ def daily_schedule_page():
         with st.spinner("Carregando metadados dos arquivos..."):
             st.session_state.files_df = fetch_metadata_from_db(supabase)
 
-    st.subheader("Filtros")
+    # [MODIFICADO] Adicionado botão de atualização ao lado do título do filtro
+    header_cols = st.columns([3, 1])
+    with header_cols[0]:
+        st.subheader("Filtros")
+    with header_cols[1]:
+        if st.button("🔄 Atualizar Página", use_container_width=True, help="Recarrega os dados da agenda do Baserow"):
+            st.rerun()
     
     # Inicialização dos filtros (apenas uma vez)
     if "view_mode" not in st.session_state:
-        st.session_state.view_mode = "Semana"
+        # [MODIFICADO] Alterado o filtro padrão para "Todo o período"
+        st.session_state.view_mode = "Todo o período"
         st.session_state.selected_date = date.today()
         st.session_state.prof_filter = "Todos"
         st.session_state.cat_filter = "Todos"
@@ -548,6 +555,7 @@ def daily_schedule_page():
 
         with st.container(border=False):
             col1, col2 = st.columns([3, 2])
+            # O index=4 corresponde a "Todo o período" na lista de opções
             col1.radio("Visualização:", ["Dia", "Semana", "Mês", "Trimestre", "Todo o período"], horizontal=True, key="view_mode", index=4)
             col2.date_input("Data:", key="selected_date", disabled=(st.session_state.view_mode == "Todo o período"))
             
@@ -565,6 +573,9 @@ def daily_schedule_page():
             search_col, btn_col = st.columns([4, 1.08])
             search_col.text_input("Buscar paciente...", placeholder="Buscar paciente...", label_visibility="collapsed", key="search_term")
             btn_col.button("Limpar Filtros", on_click=clear_filters_callback)
+        
+        # Remove possíveis duplicatas ANTES de filtrar
+        df = df.drop_duplicates(subset=['scheduled_date', 'time', 'name'], keep='first')
         
         # Aplicação dos filtros
         start_date, end_date = get_date_range(st.session_state.selected_date, st.session_state.view_mode)
@@ -586,6 +597,9 @@ def daily_schedule_page():
             filtered_df = filtered_df[filtered_df['event'] == st.session_state.event_filter]
         if st.session_state.search_term:
             filtered_df = filtered_df[filtered_df['name'].str.contains(st.session_state.search_term, case=False, na=False)]
+        
+        # Remove linhas com valores nulos críticos
+        filtered_df = filtered_df.dropna(subset=['scheduled_date', 'name'])
         
         # Cabeçalho
         if st.session_state.view_mode == "Dia":
@@ -1108,7 +1122,7 @@ def approval_workflow_page():
                         st.rerun()
 
 
-# --- [FORMATAÇÃO AJUSTADA] PÁGINA DE CONFIRMAÇÃO DE AGENDAMENTOS ---
+# --- [AJUSTADA] PÁGINA DE CONFIRMAÇÃO DE AGENDAMENTOS ---
 def confirmation_page():
     """
     Exibe a página de confirmação em massa com formatação de preview aprimorada, 
@@ -1338,27 +1352,29 @@ def confirmation_page():
     end_date_str = st.session_state.conf_end_date.strftime('%d/%m/%Y')
     st.header(f"Agendamentos de {start_date_str} até {end_date_str}")
 
-    total_agendamentos = len(filtered_df)
-    confirmados = len(filtered_df[filtered_df['status'] == 'Confirmado'])
-    pendentes = len(filtered_df[filtered_df['status'] == 'Pendente'])
-    reagendados = len(filtered_df[filtered_df['status'] == 'Reagendado'])
-    cancelados = len(filtered_df[filtered_df['status'] == 'Cancelado'])
-    
-    st.markdown(f"""
-        <div style="display: flex; align-items: center; gap: 20px; font-size: 1.1rem; margin-bottom: 15px;">
-            <span><b>{total_agendamentos}</b> agendamentos</span>
-            <span style="color: #28a745;"><b>{confirmados}</b> confirmados</span>
-            <span style="color: darkorange;"><b>{pendentes}</b> pendentes</span>
-            <span style="color: #007bff;"><b>{reagendados}</b> reagendados</span>
-            <span style="color: #6c757d;"><b>{cancelados}</b> cancelados</span>
-        </div>
-    """, unsafe_allow_html=True)
-
-    # --- TABELA DE AGENDAMENTOS ---
+    # --- [CORRIGIDO] TABELA DE AGENDAMENTOS E ESTATÍSTICAS ---
     if filtered_df.empty:
         st.warning("Nenhum agendamento encontrado para os filtros selecionados.")
         st.session_state.edited_df = pd.DataFrame()
     else:
+        # [CORRIGIDO] O cálculo das estatísticas foi movido para DENTRO deste bloco 'else'.
+        # Isso garante que o código só tente acessar a coluna 'status' se o DataFrame não estiver vazio.
+        total_agendamentos = len(filtered_df)
+        confirmados = len(filtered_df[filtered_df['status'] == 'Confirmado'])
+        pendentes = len(filtered_df[filtered_df['status'] == 'Pendente'])
+        reagendados = len(filtered_df[filtered_df['status'] == 'Reagendado'])
+        cancelados = len(filtered_df[filtered_df['status'] == 'Cancelado'])
+        
+        st.markdown(f"""
+            <div style="display: flex; align-items: center; gap: 20px; font-size: 1.1rem; margin-bottom: 15px;">
+                <span><b>{total_agendamentos}</b> agendamentos</span>
+                <span style="color: #28a745;"><b>{confirmados}</b> confirmados</span>
+                <span style="color: darkorange;"><b>{pendentes}</b> pendentes</span>
+                <span style="color: #007bff;"><b>{reagendados}</b> reagendados</span>
+                <span style="color: #6c757d;"><b>{cancelados}</b> cancelados</span>
+            </div>
+        """, unsafe_allow_html=True)
+
         base_df = filtered_df[['name', 'time', 'category', 'professional', 'status', 'phone']].copy()
         base_df.rename(columns={
             'name': 'Paciente', 'time': 'Horário', 'category': 'Modalidade',
