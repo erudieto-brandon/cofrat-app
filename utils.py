@@ -1504,7 +1504,8 @@ def main_app(logo_path):
             # O botão é "primary" se for a página ativa, senão é "secondary"
             type="primary" if st.session_state.active_page == "Confirmação" else "secondary"
         )
-    
+     
+     
     with col_auto:
         st.button(
             "Automações", 
