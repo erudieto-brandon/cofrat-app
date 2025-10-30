@@ -1,8 +1,8 @@
-numpy==2.3.3
+numpy==2.3.4
 pandas==2.3.3
 python-dotenv==1.1.1
 python_dateutil==2.9.0.post0
 Requests==2.32.5
 streamlit==1.50.0
-streamlit_option_menu
-supabase==2.22.0
+streamlit_option_menu==0.4.0
+supabase==2.22.2
