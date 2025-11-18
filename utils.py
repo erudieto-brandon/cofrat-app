@@ -4,6 +4,9 @@ import streamlit_antd_components as sac
 import pandas as pd
 import requests
 import base64
+import csv
+import re
+import io
 
 # --- FUNÇÃO PARA CARREGAR IMAGEM ---
 def load_image_as_base64(image_path):
@@ -82,48 +85,168 @@ def login_form(logo_path):
 
 # --- PÁGINA DE CONFIRMAÇÃO DE AGENDAMENTOS (CONTEÚDO COMPLETO) ---
 def confirmation_page():
-    def process_clean_excel(df):
-        if 'Data' in df.columns:
-            df['Data'] = df['Data'].astype(str)
+    # As funções de ajuda do Colab foram movidas para cá
+    def adjust_phone_number(phone_number):
+        """Ajusta o número de telefone para o formato com código do país (55) e DDD."""
+        digits_only = re.sub(r'\D', '', str(phone_number))
+        if len(digits_only) > 10:
+            if not digits_only.startswith('55'):
+                return '55' + digits_only
+            return digits_only
+        elif len(digits_only) == 10:
+            return '55' + digits_only
+        elif len(digits_only) >= 8:
+            return '5511' + digits_only
+        else:
+            return '' # Retorna vazio se o número for inválido
+
+    def adjust_time(time_str):
+        """Ajusta a string de horário para o formato HH:MM e arredonda para baixo a cada 10 minutos."""
+        if pd.isna(time_str):
+            return time_str
+        try:
+            time_obj = pd.to_datetime(time_str, format='%H:%M').time()
+            full_datetime = pd.to_datetime(f"1970-01-01 {time_obj}")
+            rounded_time = full_datetime.floor('10min')
+            return rounded_time.strftime('%H:%M')
+        except (ValueError, TypeError):
+            return time_str
+
+    def process_and_clean_csv(uploaded_file):
+        """
+        Lê um arquivo CSV, processa os dados, calcula estatísticas, separa registros bons e ruins,
+        e retorna DataFrames e estatísticas.
+        """
+        file_content = uploaded_file.getvalue().decode('latin1')
+        csv_file = io.StringIO(file_content)
+
+        columns = [
+            'Data', 'Especialidade', 'Hora', 'Medico', 'Convenio',
+            'Evento', 'Paciente', 'Telefone', 'Prontuario'
+        ]
+        processed_rows = []
+        current_date = None
+        current_specialty = None
+        time_regex = re.compile(r'^\d{2}:\d{2}$')
+
+        reader = csv.reader(csv_file)
+        for row in reader:
+            if not row: continue
+            if row[0] == 'Data:' and 'Especialidade: ' in row:
+                current_date, current_specialty = row[1], row[3]
+                try:
+                    start_index = next(i for i, field in enumerate(row) if time_regex.match(field))
+                    data_fields = row[start_index:]
+                    processed_rows.append([current_date, current_specialty] + data_fields[:7])
+                except StopIteration: continue
+            elif 'Página :' in row[0]:
+                try:
+                    start_index = next(i for i, field in enumerate(row) if time_regex.match(field))
+                    data_fields = row[start_index:]
+                    processed_rows.append([current_date, current_specialty] + data_fields[:7])
+                except StopIteration: continue
+
+        df = pd.DataFrame(processed_rows, columns=columns)
+        if df.empty:
+            return pd.DataFrame(), pd.DataFrame(), {}
+
+        df['Número de Telefone Ajustado'] = df['Telefone'].apply(adjust_phone_number)
+        df['Horario'] = df['Hora'].apply(adjust_time)
+        df['Data'] = pd.to_datetime(df['Data'], format='%d/%m/%Y').dt.strftime('%d/%m/%Y')
+
         df.columns = df.columns.str.strip().str.lower().str.replace(' ', '_').str.replace('ú', 'u').str.replace('é', 'e').str.replace('ç', 'c').str.replace('ã', 'a')
-        required_columns = ['data', 'horario', 'medico', 'paciente', 'numero_de_telefone_ajustado']
-        missing_cols = [col for col in required_columns if col not in df.columns]
-        if missing_cols:
-            raise ValueError(f"As colunas obrigatórias a seguir não foram encontradas: {', '.join(missing_cols)}.")
-        df.rename(columns={'paciente': 'nome_do_paciente', 'medico': 'nome_do_medico', 'horario': 'horario_ajustado', 'numero_de_telefone_ajustado': 'telefone_ajustado'}, inplace=True)
-        return df
+        df.rename(columns={
+            'paciente': 'nome_do_paciente', 'medico': 'nome_do_medico',
+            'horario': 'horario_ajustado', 'numero_de_telefone_ajustado': 'telefone_ajustado'
+        }, inplace=True)
+
+        # Estatísticas gerais
+        total_records = len(df)
+        phone_counts = df['telefone_ajustado'].value_counts()
+        unique_appointments = len(phone_counts[phone_counts.index != ''])
+        repeated_appointments = len(phone_counts[phone_counts > 1])
+
+        # Critérios e contagem de qualidade de dados
+        is_phone_empty = df['telefone_ajustado'] == ''
+        # Garante que a verificação de comprimento só ocorra em telefones não vazios
+        is_phone_length_wrong = (~is_phone_empty) & (df['telefone_ajustado'].str.len() != 13)
+        
+        bad_data_mask = is_phone_empty | is_phone_length_wrong
+        
+        stats = {
+            'total': total_records,
+            'unique': unique_appointments,
+            'repeated': repeated_appointments,
+            'bad_total': bad_data_mask.sum(),
+            'bad_empty': is_phone_empty.sum(),
+            'bad_length': is_phone_length_wrong.sum()
+        }
+
+        df_bad = df[bad_data_mask]
+        df_good = df[~bad_data_mask]
+
+        # Adicionar registros estáticos ao DataFrame de dados bons
+        static_data = [
+            {'data': '15/02/2026', 'horario_ajustado': '13:10', 'nome_do_paciente': 'BRANDON AGUIAR', 'nome_do_medico': 'LEANDRO TETSUO OKAMURA', 'telefone': '(11) 95904 4561', 'telefone_ajustado': '5511959044561'},
+            {'data': '20/03/2026', 'horario_ajustado': '08:40', 'nome_do_paciente': 'KARINE COFRAT', 'nome_do_medico': 'LEANDRO TETSUO OKAMURA', 'telefone': '(11) 97140-2433', 'telefone_ajustado': '5511971402433'}
+        ]
+        df_static = pd.DataFrame(static_data)
+        df_good = pd.concat([df_static, df_good], ignore_index=True)
+
+        final_columns_order = [
+            'data', 'horario_ajustado', 'nome_do_paciente',
+            'nome_do_medico', 'telefone', 'telefone_ajustado'
+        ]
+        
+        return df_good[final_columns_order], df_bad[final_columns_order], stats
+
+    # --- Interface do Streamlit ---
 
     if 'edited_df' not in st.session_state:
         st.session_state.edited_df = None
     if 'uploaded_file_name' not in st.session_state:
         st.session_state.uploaded_file_name = None
+    if 'bad_df' not in st.session_state:
+        st.session_state.bad_df = None
+    if 'stats' not in st.session_state:
+        st.session_state.stats = None
 
     st.title("Central de Disparos")
     st.caption("Clínica de Ortopedia e Terapia")
     st.divider()
 
-    st.subheader("1. Carregar Arquivo de Agendamentos (.xlsx)")
-    uploaded_file = st.file_uploader("Selecione o arquivo Excel", type=["xlsx"], key="excel_uploader")
+    st.subheader("1. Carregar Arquivo de Agendamentos (.csv)")
+    uploaded_file = st.file_uploader("Selecione o arquivo CSV", type=["csv"], key="csv_uploader")
 
     if uploaded_file is not None:
         if uploaded_file.name != st.session_state.uploaded_file_name:
             st.session_state.edited_df = None
+            st.session_state.bad_df = None
+            st.session_state.stats = None
             st.session_state.uploaded_file_name = uploaded_file.name
+        
         if st.session_state.edited_df is None and st.button("⚙️ Processar Arquivo", use_container_width=True, type="primary"):
-            with st.spinner("Processando..."):
+            with st.spinner("Processando e analisando a qualidade dos dados..."):
                 try:
-                    df = pd.read_excel(uploaded_file, dtype={'Data': str})
-                    processed_df = process_clean_excel(df)
-                    processed_df.insert(0, 'Selecionar', False)
-                    st.session_state.edited_df = processed_df
+                    good_df, bad_df, stats = process_and_clean_csv(uploaded_file)
+                    good_df.insert(0, 'Selecionar', False)
+                    st.session_state.edited_df = good_df
+                    st.session_state.bad_df = bad_df
+                    st.session_state.stats = stats
                     st.success("Arquivo processado!")
                     st.rerun()
                 except Exception as e:
                     st.error(f"Erro ao processar o arquivo: {e}")
 
     if st.session_state.edited_df is not None:
-        st.header("Agendamentos Carregados")
-        st.subheader("2. Selecione os Pacientes para Envio")
+        st.header("Visão Geral dos Agendamentos")
+        col1, col2, col3 = st.columns(3)
+        col1.metric("Total de Registros Carregados", st.session_state.stats.get('total', 0))
+        col2.metric("Pacientes Únicos (por telefone)", st.session_state.stats.get('unique', 0))
+        col3.metric("Pacientes com Múltiplos Agendamentos", st.session_state.stats.get('repeated', 0))
+        
+        st.header("Agendamentos Válidos para Envio")
+        st.subheader("2. Selecione os Pacientes")
         
         def toggle_all():
             new_value = st.session_state.select_all_checkbox
@@ -138,6 +261,26 @@ def confirmation_page():
         st.session_state.edited_df = edited_df_output
 
         st.divider()
+
+        # Estatísticas de Qualidade e Tabela de Dados Ruins
+        if st.session_state.bad_df is not None and not st.session_state.bad_df.empty:
+            st.subheader("Análise de Qualidade dos Dados")
+            total_records = st.session_state.stats.get('total', 0)
+            bad_records = st.session_state.stats.get('bad_total', 0)
+            percentage_bad = (bad_records / total_records) * 100 if total_records > 0 else 0
+            
+            col_dq1, col_dq2 = st.columns(2)
+            col_dq1.metric("Total de Registros com Problemas", f"{bad_records}")
+            col_dq2.metric("Percentual de Problemas", f"{percentage_bad:.2f}%")
+
+            col_dq3, col_dq4 = st.columns(2)
+            col_dq3.metric("Problema: Telefone Nulo/Vazio", f"{st.session_state.stats.get('bad_empty', 0)}")
+            col_dq4.metric("Problema: Comprimento Inválido", f"{st.session_state.stats.get('bad_length', 0)}")
+
+            st.write("Os registros abaixo foram removidos da lista de envio devido aos problemas de dados identificados.")
+            st.dataframe(st.session_state.bad_df, use_container_width=True, hide_index=True)
+            st.divider()
+
         st.subheader("3. Escolha o Template e Envie")
         templates = {
             "Confirmacao_Agendamento": "Olá, {nome_do_paciente}! Sua consulta com Dr(a). {nome_do_medico} está confirmada para o dia {data} às {horario_ajustado}. Até breve!",
@@ -164,7 +307,7 @@ def confirmation_page():
                         st.error(f"❌ Erro de conexão: {e}")
             else:
                 st.warning("Nenhum paciente selecionado.")
-
+                
 # --- PÁGINA DE AUTOMAÇÕES (CONTEÚDO COMPLETO) ---
 def automations_page():
     st.title("Automações")
@@ -181,34 +324,6 @@ def automations_page():
                     st.success("✅ Fluxo acionado com sucesso!")
                 else:
                     st.error(f"❌ Falha ao acionar o fluxo: {response.status_code}")
-            except requests.exceptions.RequestException as e:
-                st.error(f"❌ Erro de conexão: {e}")
-
-    st.divider()
-    st.subheader("Padronizar Números de Telefone na Base de Dados")
-    if st.button("🚀 Iniciar Padronização de Telefones", use_container_width=True):
-        WEBHOOK_URL_PHONES = "https://webhook.erudieto.com.br/webhook/transformar-numeros"
-        with st.spinner("Acionando a automação..."):
-            try:
-                response = requests.post(WEBHOOK_URL_PHONES, timeout=30)
-                if 200 <= response.status_code < 300:
-                    st.success("✅ Automação iniciada com sucesso!")
-                else:
-                    st.error(f"❌ Falha ao acionar a automação: {response.status_code}")
-            except requests.exceptions.RequestException as e:
-                st.error(f"❌ Erro de conexão: {e}")
-
-    st.divider()
-    st.subheader("Deletar Agora")
-    if st.button("🗑️ Deletar Agora", use_container_width=True):
-        WEBHOOK_URL_DELETE = "https://webhook.erudieto.com.br/webhook/delete"
-        with st.spinner("Acionando a automação..."):
-            try:
-                response = requests.post(WEBHOOK_URL_DELETE, timeout=30)
-                if 200 <= response.status_code < 300:
-                    st.success("✅ Automação de deleção iniciada com sucesso!")
-                else:
-                    st.error(f"❌ Falha ao acionar a automação: {response.status_code}")
             except requests.exceptions.RequestException as e:
                 st.error(f"❌ Erro de conexão: {e}")
 
