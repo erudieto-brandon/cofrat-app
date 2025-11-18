@@ -114,7 +114,7 @@ def confirmation_page():
 
     def process_and_clean_csv(uploaded_file):
         """
-        Lê um arquivo CSV, processa os dados, calcula estatísticas, separa registros bons e ruins,
+        Lê um arquivo CSV, processa os dados, calcula estatísticas, separa registros bons, ruins e repetidos (por nome),
         e retorna DataFrames e estatísticas.
         """
         file_content = uploaded_file.getvalue().decode('latin1')
@@ -148,7 +148,7 @@ def confirmation_page():
 
         df = pd.DataFrame(processed_rows, columns=columns)
         if df.empty:
-            return pd.DataFrame(), pd.DataFrame(), {}
+            return pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), {}
 
         df['Número de Telefone Ajustado'] = df['Telefone'].apply(adjust_phone_number)
         df['Horario'] = df['Hora'].apply(adjust_time)
@@ -164,11 +164,14 @@ def confirmation_page():
         total_records = len(df)
         phone_counts = df['telefone_ajustado'].value_counts()
         unique_appointments = len(phone_counts[phone_counts.index != ''])
-        repeated_appointments = len(phone_counts[phone_counts > 1])
+        
+        # --- ALTERAÇÃO AQUI: Contagem baseada no nome do paciente ---
+        patient_name_counts = df['nome_do_paciente'].value_counts()
+        repeated_appointments = len(patient_name_counts[patient_name_counts > 1])
+        # --- FIM DA ALTERAÇÃO ---
 
         # Critérios e contagem de qualidade de dados
         is_phone_empty = df['telefone_ajustado'] == ''
-        # Garante que a verificação de comprimento só ocorra em telefones não vazios
         is_phone_length_wrong = (~is_phone_empty) & (df['telefone_ajustado'].str.len() != 13)
         
         bad_data_mask = is_phone_empty | is_phone_length_wrong
@@ -193,12 +196,23 @@ def confirmation_page():
         df_static = pd.DataFrame(static_data)
         df_good = pd.concat([df_static, df_good], ignore_index=True)
 
+        # --- ALTERAÇÃO AQUI: Identificar pacientes com múltiplos agendamentos pelo NOME ---
+        good_name_counts = df_good['nome_do_paciente'].value_counts()
+        repeated_names = good_name_counts[good_name_counts > 1].index
+        df_repeated = df_good[df_good['nome_do_paciente'].isin(repeated_names)].sort_values(by=['nome_do_paciente', 'data', 'horario_ajustado'])
+        # --- FIM DA ALTERAÇÃO ---
+
         final_columns_order = [
             'data', 'horario_ajustado', 'nome_do_paciente',
             'nome_do_medico', 'telefone', 'telefone_ajustado'
         ]
         
-        return df_good[final_columns_order], df_bad[final_columns_order], stats
+        # Garante que todos os dataframes tenham as colunas na ordem correta
+        df_good_final = df_good[final_columns_order]
+        df_bad_final = df_bad[final_columns_order] if not df_bad.empty else pd.DataFrame(columns=final_columns_order)
+        df_repeated_final = df_repeated[final_columns_order] if not df_repeated.empty else pd.DataFrame(columns=final_columns_order)
+
+        return df_good_final, df_bad_final, df_repeated_final, stats
 
     # --- Interface do Streamlit ---
 
@@ -210,6 +224,8 @@ def confirmation_page():
         st.session_state.bad_df = None
     if 'stats' not in st.session_state:
         st.session_state.stats = None
+    if 'repeated_df' not in st.session_state:
+        st.session_state.repeated_df = None
 
     st.title("Central de Disparos")
     st.caption("Clínica de Ortopedia e Terapia")
@@ -223,15 +239,17 @@ def confirmation_page():
             st.session_state.edited_df = None
             st.session_state.bad_df = None
             st.session_state.stats = None
+            st.session_state.repeated_df = None
             st.session_state.uploaded_file_name = uploaded_file.name
         
         if st.session_state.edited_df is None and st.button("⚙️ Processar Arquivo", use_container_width=True, type="primary"):
             with st.spinner("Processando e analisando a qualidade dos dados..."):
                 try:
-                    good_df, bad_df, stats = process_and_clean_csv(uploaded_file)
+                    good_df, bad_df, repeated_df, stats = process_and_clean_csv(uploaded_file)
                     good_df.insert(0, 'Selecionar', False)
                     st.session_state.edited_df = good_df
                     st.session_state.bad_df = bad_df
+                    st.session_state.repeated_df = repeated_df
                     st.session_state.stats = stats
                     st.success("Arquivo processado!")
                     st.rerun()
@@ -259,6 +277,20 @@ def confirmation_page():
         
         edited_df_output = st.data_editor(st.session_state.edited_df, use_container_width=True, hide_index=True, disabled=st.session_state.edited_df.columns.drop('Selecionar'))
         st.session_state.edited_df = edited_df_output
+
+        # --- SEÇÃO: TABELA DE PACIENTES COM MÚLTIPLOS AGENDAMENTOS ---
+        if st.session_state.repeated_df is not None and not st.session_state.repeated_df.empty:
+            st.subheader("Pacientes com Múltiplos Agendamentos na Mesma Carga")
+            st.write("A tabela abaixo destaca os pacientes que possuem mais de um agendamento no arquivo carregado, para facilitar a verificação.")
+            
+            # Seleciona colunas relevantes para exibição
+            display_cols_repeated = ['data', 'horario_ajustado', 'nome_do_paciente', 'nome_do_medico', 'telefone_ajustado']
+            st.dataframe(
+                st.session_state.repeated_df[display_cols_repeated],
+                use_container_width=True,
+                hide_index=True
+            )
+        # --- FIM DA SEÇÃO ---
 
         st.divider()
 
