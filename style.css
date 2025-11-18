@@ -346,9 +346,3 @@ div[data-testid="stProgressBar"] > div {
     border-bottom: none !important;
 }
 
-[data-testid="stSidebar"] {
-    background-image: url(https://64.media.tumblr.com/355a567fb354a9948da47cfa3fd60c6b/3738600cda58d8af-d9/s500x750/769f82598ee8e7a9bae7a8da6e5ebc995cc935d5.pnj);
-    background-size: 130px;
-    background-repeat: no-repeat;
-    background-position: 30px 30px;
-}
