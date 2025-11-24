@@ -385,3 +385,4 @@ def main_app(logo_path):
         confirmation_page()
     elif selected == 'Automações':
         automations_page()
+        
