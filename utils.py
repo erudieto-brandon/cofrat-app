@@ -112,10 +112,10 @@ def confirmation_page():
         except (ValueError, TypeError):
             return time_str
 
-    def process_and_clean_csv(uploaded_file):
+    def process_and_clean_csv(uploaded_file, file_type):
         """
-        Lê um arquivo CSV, processa os dados, calcula estatísticas, separa registros bons, ruins e repetidos (por nome),
-        e retorna DataFrames e estatísticas.
+        Lê um arquivo CSV, processa os dados com base no TIPO DE ARQUIVO, calcula estatísticas, 
+        separa registros bons, ruins e repetidos (por nome), e retorna DataFrames e estatísticas.
         """
         file_content = uploaded_file.getvalue().decode('latin1')
         csv_file = io.StringIO(file_content)
@@ -125,34 +125,94 @@ def confirmation_page():
             'Evento', 'Paciente', 'Telefone', 'Prontuario'
         ]
         processed_rows = []
-        current_date = None
-        current_specialty = None
         time_regex = re.compile(r'^\d{2}:\d{2}$')
-
+        
         reader = csv.reader(csv_file)
-        for row in reader:
-            if not row: continue
-            if row[0] == 'Data:' and 'Especialidade: ' in row:
-                current_date, current_specialty = row[1], row[3]
+
+        # --- LÓGICA DE EXTRAÇÃO BASEADA NO TIPO DE ARQUIVO ---
+        
+        if file_type == "Consultas":
+            # Lógica Original para Consultas
+            current_date = None
+            current_specialty = None
+            
+            for row in reader:
+                if not row: continue
+                if row[0] == 'Data:' and 'Especialidade: ' in row:
+                    current_date, current_specialty = row[1], row[3]
+                    try:
+                        start_index = next(i for i, field in enumerate(row) if time_regex.match(field))
+                        data_fields = row[start_index:]
+                        # Estrutura Consultas: Data, Esp, Hora, Medico, Convenio, Evento, Paciente, Tel, Pront
+                        processed_rows.append([current_date, current_specialty] + data_fields[:7])
+                    except StopIteration: continue
+                elif 'Página :' in row[0]:
+                    try:
+                        start_index = next(i for i, field in enumerate(row) if time_regex.match(field))
+                        data_fields = row[start_index:]
+                        processed_rows.append([current_date, current_specialty] + data_fields[:7])
+                    except StopIteration: continue
+
+        elif file_type in ["Acupuntura", "RPG"]:
+            # Nova Lógica para Acupuntura e RPG (Layout de Serviços)
+            current_date = None
+            current_specialty = None
+            current_doctor = None
+
+            for row in reader:
+                if not row: continue
+
+                # 1. Captura de Contexto: Médico e Especialidade
+                if 'Médico:' in row:
+                    try:
+                        if 'Agenda de:' in row:
+                            spec_index = row.index('Agenda de:') + 1
+                            current_specialty = row[spec_index]
+                        
+                        doc_index = row.index('Médico:') + 1
+                        current_doctor = row[doc_index]
+                    except (ValueError, IndexError):
+                        pass
+                
+                # 2. Captura de Contexto: Data
+                if len(row) > 1 and row[0] == 'Data:':
+                    current_date = row[1]
+                
+                # 3. Extração dos Dados do Paciente
                 try:
                     start_index = next(i for i, field in enumerate(row) if time_regex.match(field))
                     data_fields = row[start_index:]
-                    processed_rows.append([current_date, current_specialty] + data_fields[:7])
-                except StopIteration: continue
-            elif 'Página :' in row[0]:
-                try:
-                    start_index = next(i for i, field in enumerate(row) if time_regex.match(field))
-                    data_fields = row[start_index:]
-                    processed_rows.append([current_date, current_specialty] + data_fields[:7])
-                except StopIteration: continue
+                    
+                    # Mapeamento Acupuntura/RPG:
+                    # [0] Hora, [2] Paciente, [4] Evento, [5] Fone, [6] Pront, [7] Convenio
+                    if len(data_fields) >= 8:
+                        new_row = [
+                            current_date,       # Data
+                            current_specialty,  # Especialidade
+                            data_fields[0],     # Hora
+                            current_doctor,     # Medico (do cabeçalho)
+                            data_fields[7],     # Convenio
+                            data_fields[4],     # Evento
+                            data_fields[2],     # Paciente
+                            data_fields[5],     # Telefone
+                            data_fields[6]      # Prontuario
+                        ]
+                        processed_rows.append(new_row)
+                except StopIteration:
+                    continue
+
+        # --- FIM DA LÓGICA DE EXTRAÇÃO ---
 
         df = pd.DataFrame(processed_rows, columns=columns)
         if df.empty:
             return pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), {}
 
+        # --- TRATAMENTO DE DADOS (COMUM A TODOS) ---
         df['Número de Telefone Ajustado'] = df['Telefone'].apply(adjust_phone_number)
         df['Horario'] = df['Hora'].apply(adjust_time)
-        df['Data'] = pd.to_datetime(df['Data'], format='%d/%m/%Y').dt.strftime('%d/%m/%Y')
+        
+        # Converte data para string formatada (garante consistência)
+        df['Data'] = pd.to_datetime(df['Data'], dayfirst=True, errors='coerce').dt.strftime('%d/%m/%Y')
 
         df.columns = df.columns.str.strip().str.lower().str.replace(' ', '_').str.replace('ú', 'u').str.replace('é', 'e').str.replace('ç', 'c').str.replace('ã', 'a')
         df.rename(columns={
@@ -165,10 +225,8 @@ def confirmation_page():
         phone_counts = df['telefone_ajustado'].value_counts()
         unique_appointments = len(phone_counts[phone_counts.index != ''])
         
-        # --- ALTERAÇÃO AQUI: Contagem baseada no nome do paciente ---
         patient_name_counts = df['nome_do_paciente'].value_counts()
         repeated_appointments = len(patient_name_counts[patient_name_counts > 1])
-        # --- FIM DA ALTERAÇÃO ---
 
         # Critérios e contagem de qualidade de dados
         is_phone_empty = df['telefone_ajustado'] == ''
@@ -196,11 +254,10 @@ def confirmation_page():
         df_static = pd.DataFrame(static_data)
         df_good = pd.concat([df_static, df_good], ignore_index=True)
 
-        # --- ALTERAÇÃO AQUI: Identificar pacientes com múltiplos agendamentos pelo NOME ---
+        # Identificar pacientes com múltiplos agendamentos pelo NOME
         good_name_counts = df_good['nome_do_paciente'].value_counts()
         repeated_names = good_name_counts[good_name_counts > 1].index
         df_repeated = df_good[df_good['nome_do_paciente'].isin(repeated_names)].sort_values(by=['nome_do_paciente', 'data', 'horario_ajustado'])
-        # --- FIM DA ALTERAÇÃO ---
 
         final_columns_order = [
             'data', 'horario_ajustado', 'nome_do_paciente',
@@ -208,9 +265,11 @@ def confirmation_page():
         ]
         
         # Garante que todos os dataframes tenham as colunas na ordem correta
-        df_good_final = df_good[final_columns_order]
-        df_bad_final = df_bad[final_columns_order] if not df_bad.empty else pd.DataFrame(columns=final_columns_order)
-        df_repeated_final = df_repeated[final_columns_order] if not df_repeated.empty else pd.DataFrame(columns=final_columns_order)
+        available_cols = [c for c in final_columns_order if c in df_good.columns]
+        
+        df_good_final = df_good[available_cols]
+        df_bad_final = df_bad[available_cols] if not df_bad.empty else pd.DataFrame(columns=available_cols)
+        df_repeated_final = df_repeated[available_cols] if not df_repeated.empty else pd.DataFrame(columns=available_cols)
 
         return df_good_final, df_bad_final, df_repeated_final, stats
 
@@ -232,27 +291,45 @@ def confirmation_page():
     st.divider()
 
     st.subheader("1. Carregar Arquivo de Agendamentos (.csv)")
+    
+    # --- NOVO: Dropdown para selecionar o tipo de arquivo (Incluindo RPG) ---
+    file_type_option = st.selectbox(
+        "Selecione o tipo de arquivo:",
+        options=["Consultas", "Acupuntura", "RPG"],
+        index=0,
+        help="Escolha 'Consultas' para o layout padrão ou 'Acupuntura'/'RPG' para o layout de serviços."
+    )
+    # -------------------------------------------------------
+
     uploaded_file = st.file_uploader("Selecione o arquivo CSV", type=["csv"], key="csv_uploader")
 
     if uploaded_file is not None:
-        if uploaded_file.name != st.session_state.uploaded_file_name:
+        # Reseta o estado se mudar o arquivo OU o tipo de arquivo
+        current_file_key = f"{uploaded_file.name}_{file_type_option}"
+        
+        if current_file_key != st.session_state.uploaded_file_name:
             st.session_state.edited_df = None
             st.session_state.bad_df = None
             st.session_state.stats = None
             st.session_state.repeated_df = None
-            st.session_state.uploaded_file_name = uploaded_file.name
+            st.session_state.uploaded_file_name = current_file_key
         
         if st.session_state.edited_df is None and st.button("⚙️ Processar Arquivo", use_container_width=True, type="primary"):
             with st.spinner("Processando e analisando a qualidade dos dados..."):
                 try:
-                    good_df, bad_df, repeated_df, stats = process_and_clean_csv(uploaded_file)
-                    good_df.insert(0, 'Selecionar', False)
-                    st.session_state.edited_df = good_df
-                    st.session_state.bad_df = bad_df
-                    st.session_state.repeated_df = repeated_df
-                    st.session_state.stats = stats
-                    st.success("Arquivo processado!")
-                    st.rerun()
+                    # Passa o file_type_option para a função
+                    good_df, bad_df, repeated_df, stats = process_and_clean_csv(uploaded_file, file_type_option)
+                    
+                    if good_df.empty and bad_df.empty:
+                        st.warning("Nenhum dado foi encontrado. Verifique se selecionou o 'Tipo de Arquivo' correto.")
+                    else:
+                        good_df.insert(0, 'Selecionar', False)
+                        st.session_state.edited_df = good_df
+                        st.session_state.bad_df = bad_df
+                        st.session_state.repeated_df = repeated_df
+                        st.session_state.stats = stats
+                        st.success("Arquivo processado!")
+                        st.rerun()
                 except Exception as e:
                     st.error(f"Erro ao processar o arquivo: {e}")
 
@@ -285,6 +362,9 @@ def confirmation_page():
             
             # Seleciona colunas relevantes para exibição
             display_cols_repeated = ['data', 'horario_ajustado', 'nome_do_paciente', 'nome_do_medico', 'telefone_ajustado']
+            # Filtra colunas que realmente existem
+            display_cols_repeated = [c for c in display_cols_repeated if c in st.session_state.repeated_df.columns]
+            
             st.dataframe(
                 st.session_state.repeated_df[display_cols_repeated],
                 use_container_width=True,
@@ -313,20 +393,22 @@ def confirmation_page():
             st.dataframe(st.session_state.bad_df, use_container_width=True, hide_index=True)
             st.divider()
 
-        st.subheader("3. Escolha o Template e Envie")
-        templates = {
-            "Confirmacao_Agendamento": "Olá, {nome_do_paciente}! Sua consulta com Dr(a). {nome_do_medico} está confirmada para o dia {data} às {horario_ajustado}. Até breve!",
-            "Lembrete_48h": "Lembrete: sua consulta com Dr(a). {nome_do_medico} é depois de amanhã, dia {data} às {horario_ajustado}. Contamos com sua presença!",
-        }
-        selected_template_name = st.selectbox("Selecione o template:", options=list(templates.keys()))
-        st.code(templates[selected_template_name], language="text")
-
+        # --- ALTERAÇÃO AQUI: Removida a seleção de template ---
+        st.subheader("3. Enviar Mensagens")
+        st.write(f"O disparo será realizado considerando o tipo: **{file_type_option}**.")
+        
         selected_count = int(st.session_state.edited_df['Selecionar'].sum())
         if st.button(f"✉️ Enviar Mensagens ({selected_count})", use_container_width=True, type="primary"):
             if selected_count > 0:
                 selected_rows_df = st.session_state.edited_df[st.session_state.edited_df['Selecionar']].copy().fillna('')
                 contacts_payload = selected_rows_df.to_dict(orient='records')
-                final_payload = {"template_name": selected_template_name, "contacts": contacts_payload}
+                
+                # Payload sem template_name, apenas appointment_type
+                final_payload = {
+                    "appointment_type": file_type_option,
+                    "contacts": contacts_payload
+                }
+                
                 WEBHOOK_URL = "https://webhook.erudieto.com.br/webhook/disparo-em-massa"
                 with st.spinner(f"Enviando {len(contacts_payload)} mensagens..."):
                     try:
@@ -339,6 +421,7 @@ def confirmation_page():
                         st.error(f"❌ Erro de conexão: {e}")
             else:
                 st.warning("Nenhum paciente selecionado.")
+        # ------------------------------------------------------
                 
 # --- PÁGINA DE AUTOMAÇÕES (CONTEÚDO COMPLETO) ---
 def automations_page():
@@ -385,4 +468,3 @@ def main_app(logo_path):
         confirmation_page()
     elif selected == 'Automações':
         automations_page()
-        
