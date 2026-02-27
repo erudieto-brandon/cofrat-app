@@ -352,8 +352,18 @@ def confirmation_page():
         all_selected = st.session_state.edited_df['Selecionar'].all() if not st.session_state.edited_df.empty else False
         st.checkbox("Selecionar Todos", value=all_selected, on_change=toggle_all, key="select_all_checkbox")
         
-        edited_df_output = st.data_editor(st.session_state.edited_df, use_container_width=True, hide_index=True, disabled=st.session_state.edited_df.columns.drop('Selecionar'))
-        st.session_state.edited_df = edited_df_output
+        # Data Editor: edição temporária, não atualiza session state automaticamente
+        edited_df_output = st.data_editor(
+            st.session_state.edited_df,
+            use_container_width=True,
+            hide_index=True,
+            disabled=st.session_state.edited_df.columns.drop('Selecionar')
+        )
+        st.write("\n")
+        # Botão para salvar seleção
+        if st.button("Salvar seleção de pacientes", use_container_width=True, type="secondary"):
+            st.session_state.edited_df = edited_df_output
+            st.success("Seleção salva! Você pode agora enviar mensagens.")
 
         # --- SEÇÃO: TABELA DE PACIENTES COM MÚLTIPLOS AGENDAMENTOS ---
         if st.session_state.repeated_df is not None and not st.session_state.repeated_df.empty:
@@ -397,18 +407,16 @@ def confirmation_page():
         st.subheader("3. Enviar Mensagens")
         st.write(f"O disparo será realizado considerando o tipo: **{file_type_option}**.")
         
+        # Usa o DataFrame do session state (após salvar seleção)
         selected_count = int(st.session_state.edited_df['Selecionar'].sum())
         if st.button(f"✉️ Enviar Mensagens ({selected_count})", use_container_width=True, type="primary"):
             if selected_count > 0:
                 selected_rows_df = st.session_state.edited_df[st.session_state.edited_df['Selecionar']].copy().fillna('')
                 contacts_payload = selected_rows_df.to_dict(orient='records')
-                
-                # Payload sem template_name, apenas appointment_type
                 final_payload = {
                     "appointment_type": file_type_option,
                     "contacts": contacts_payload
                 }
-                
                 WEBHOOK_URL = "https://webhook.erudieto.com.br/webhook/disparo-em-massa"
                 with st.spinner(f"Enviando {len(contacts_payload)} mensagens..."):
                     try:
