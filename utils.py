@@ -482,6 +482,7 @@ def confirmation_page():
         st.header("Agendamentos Válidos para Envio")
         st.subheader("2. Selecione os Pacientes")
         
+        
         def toggle_all():
             new_value = st.session_state.select_all_checkbox
             df_copy = st.session_state.edited_df.copy()
