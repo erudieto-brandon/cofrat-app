@@ -274,139 +274,154 @@ def confirmation_page():
         return df_good_final, df_bad_final, df_repeated_final, stats
 
     def process_and_clean_autorizacao(uploaded_file):
-        """
-        Lê um arquivo Excel, processa os dados para 'Autorização liberada'.
-        Aplica a transformação de telefone e padronização de terapia.
-        Adiciona registros estáticos de teste no topo da lista.
-        """
-        try:
-            # Lê o arquivo Excel
-            df = pd.read_excel(uploaded_file)
-        except Exception as e:
-            st.error(f"Erro ao ler o arquivo Excel: {e}")
-            return pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), {}
+            """
+            Lê um arquivo Excel, processa os dados para 'Autorização liberada'.
+            Aplica a transformação de telefone, padronização de terapia e 
+            extração do primeiro nome do paciente (Capitalizado).
+            Adiciona registros estáticos de teste no topo da lista.
+            """
+            try:
+                # Lê o arquivo Excel
+                df = pd.read_excel(uploaded_file)
+            except Exception as e:
+                st.error(f"Erro ao ler o arquivo Excel: {e}")
+                return pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), {}
 
-        # Verifica se as colunas esperadas existem no arquivo
-        if 'TELEFONE' not in df.columns or 'TERAPIA ' not in df.columns:
-            st.error("O arquivo Excel não contém as colunas 'TELEFONE' e/ou 'TERAPIA ' necessárias.")
-            return pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), {}
+            # Tenta identificar a coluna de nome do paciente dinamicamente
+            name_col = None
+            for col in df.columns:
+                if str(col).strip().upper() in['PACIENTE', 'NOME', 'NOME DO PACIENTE', 'NOME_DO_PACIENTE']:
+                    name_col = col
+                    break
 
-        # =====================================================================
-        # TRANSFORMAÇÃO MANUAL (CLEAN & TRANSFORM)
-        # =====================================================================
-        
-        # Isola as colunas de interesse e remove valores nulos
-        df_reduzido = df[['TELEFONE', 'TERAPIA ']].copy()
-        df_reduzido = df_reduzido.dropna()
+            # Verifica se as colunas esperadas existem no arquivo
+            if 'TELEFONE' not in df.columns or 'TERAPIA ' not in df.columns or not name_col:
+                st.error("O arquivo Excel não contém as colunas 'TELEFONE', 'TERAPIA ' e/ou a coluna de paciente ('PACIENTE' ou 'NOME').")
+                return pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), {}
 
-        # Função de formatação de telefone adaptada para o pipeline
-        def format_phone_number(phone_number):
-            if pd.isna(phone_number) or str(phone_number).strip() == '':
-                return ''
+            # =====================================================================
+            # TRANSFORMAÇÃO MANUAL (CLEAN & TRANSFORM)
+            # =====================================================================
             
-            # Converte para string
-            phone_number = str(phone_number)
-            
-            # Remove espaços, hifens e parênteses
-            cleaned_number = phone_number.replace(' ', '').replace('-', '').replace('(', '').replace(')', '')
-            
-            # Adiciona '+55' se não estiver presente
-            if not cleaned_number.startswith('+55'):
-                # Se já começar com 55 (mas sem o +), adiciona apenas o +
-                if cleaned_number.startswith('55'):
-                    return '+' + cleaned_number
-                return '+55' + cleaned_number
+            # Isola as colunas de interesse e remove valores nulos
+            df_reduzido = df[['TELEFONE', 'TERAPIA ', name_col]].copy()
+            df_reduzido = df_reduzido.dropna(subset=['TELEFONE', 'TERAPIA ', name_col])
+
+            # Função de formatação de telefone adaptada para o pipeline
+            def format_phone_number(phone_number):
+                if pd.isna(phone_number) or str(phone_number).strip() == '':
+                    return ''
                 
-            return cleaned_number
-
-        # Função de padronização do nome da terapia
-        def standardize_therapy_name(therapy_name):
-            if pd.isna(therapy_name) or str(therapy_name).strip() == '':
-                return ''
+                # Converte para string
+                phone_number = str(phone_number)
                 
-            therapy_name = str(therapy_name).strip().upper()
+                # Remove espaços, hifens e parênteses
+                cleaned_number = phone_number.replace(' ', '').replace('-', '').replace('(', '').replace(')', '')
+                
+                # Adiciona '+55' se não estiver presente
+                if not cleaned_number.startswith('+55'):
+                    # Se já começar com 55 (mas sem o +), adiciona apenas o +
+                    if cleaned_number.startswith('55'):
+                        return '+' + cleaned_number
+                    return '+55' + cleaned_number
+                    
+                return cleaned_number
+
+            # Função de padronização do nome da terapia
+            def standardize_therapy_name(therapy_name):
+                if pd.isna(therapy_name) or str(therapy_name).strip() == '':
+                    return ''
+                    
+                therapy_name = str(therapy_name).strip().upper()
+                
+                if therapy_name == 'ACUPUNTURA':
+                    return 'Acupuntura'
+                elif therapy_name == 'FISIO/ACUP':
+                    return 'Fisioterapia, Acupuntura'
+                elif therapy_name == 'FISIOTERAPIA':
+                    return 'Fisioterapia'
+                else:
+                    return therapy_name.title()
+
+            # NOVA FUNÇÃO: Extrair e formatar apenas o primeiro nome
+            def format_first_name(full_name):
+                if pd.isna(full_name) or str(full_name).strip() == '':
+                    return ''
+                # Divide o nome por espaços, pega a primeira palavra e capitaliza (ex: 'MARIA JOSE' -> 'Maria')
+                first_name = str(full_name).strip().split()[0]
+                return first_name.capitalize()
+
+            # Aplica as transformações criando as colunas que o sistema espera
+            df_reduzido['telefone'] = df_reduzido['TELEFONE']
+            df_reduzido['telefone_ajustado'] = df_reduzido['TELEFONE'].apply(format_phone_number)
+            df_reduzido['terapia'] = df_reduzido['TERAPIA '].apply(standardize_therapy_name)
+            df_reduzido['nome_do_paciente'] = df_reduzido[name_col].apply(format_first_name)
+
+            # =====================================================================
+            # FIM DA TRANSFORMAÇÃO MANUAL
+            # =====================================================================
+
+            # Para garantir que o código não quebre no restante do sistema (UI e Webhook),
+            # criamos as colunas esperadas preenchidas com vazio caso não existam:
+            expected_columns =[
+                'nome_do_paciente',
+                'telefone_ajustado', 'terapia'
+            ]
+            for col in expected_columns:
+                if col not in df_reduzido.columns:
+                    df_reduzido[col] = ''
+
+            # Estatísticas gerais
+            total_records = len(df_reduzido)
             
-            if therapy_name == 'ACUPUNTURA':
-                return 'Acupuntura'
-            elif therapy_name == 'FISIO/ACUP':
-                return 'Fisioterapia, Acupuntura'
-            elif therapy_name == 'FISIOTERAPIA':
-                return 'Fisioterapia'
-            else:
-                return therapy_name.title()
+            # Máscara de dados ruins (telefone vazio ou com tamanho inválido)
+            is_phone_empty = df_reduzido['telefone_ajustado'] == ''
+            # Considera ruim se tiver menos de 13 caracteres (ex: +551199999999 tem 14 caracteres)
+            is_phone_length_wrong = (~is_phone_empty) & (df_reduzido['telefone_ajustado'].str.len() < 13)
+            
+            bad_data_mask = is_phone_empty | is_phone_length_wrong
+            
+            df_bad = df_reduzido[bad_data_mask]
+            df_good = df_reduzido[~bad_data_mask]
 
-        # Aplica as transformações criando as colunas que o sistema espera
-        df_reduzido['telefone'] = df_reduzido['TELEFONE']
-        df_reduzido['telefone_ajustado'] = df_reduzido['TELEFONE'].apply(format_phone_number)
-        df_reduzido['terapia'] = df_reduzido['TERAPIA '].apply(standardize_therapy_name)
+            # =====================================================================
+            # ADIÇÃO DOS REGISTROS ESTÁTICOS PARA TESTE
+            # =====================================================================
+            static_data =[
+                {'telefone': '(11) 95904-4561', 'telefone_ajustado': '+5511959044561', 'terapia': 'Acupuntura', 'nome_do_paciente': 'Brandon'},
+                {'telefone': '(11) 97140-2433', 'telefone_ajustado': '+5511971402433', 'terapia': 'Fisioterapia', 'nome_do_paciente': 'Karine'}
+            ]
+            df_static = pd.DataFrame(static_data)
+            
+            # Preenche as colunas faltantes no df_static com vazio para evitar NaN
+            for col in expected_columns:
+                if col not in df_static.columns:
+                    df_static[col] = ''
+                    
+            # Concatena os dados estáticos no topo dos dados bons
+            df_good = pd.concat([df_static, df_good], ignore_index=True)
+            # =====================================================================
 
-        # =====================================================================
-        # FIM DA TRANSFORMAÇÃO MANUAL
-        # =====================================================================
+            stats = {
+                'total': total_records,
+                'unique': len(df_good['telefone_ajustado'].unique()) if not df_good.empty else 0,
+                'repeated': 0, # Não há validação de repetidos por nome neste layout
+                'bad_total': bad_data_mask.sum(),
+                'bad_empty': is_phone_empty.sum(),
+                'bad_length': is_phone_length_wrong.sum()
+            }
 
-        # Para garantir que o código não quebre no restante do sistema (UI e Webhook),
-        # criamos as colunas esperadas preenchidas com vazio caso não existam:
-        expected_columns =[
-            #'data', 'horario_ajustado',
-            'nome_do_paciente',
-            #'nome_do_medico', 'telefone',
-            'telefone_ajustado', 'terapia'
-        ]
-        for col in expected_columns:
-            if col not in df_reduzido.columns:
-                df_reduzido[col] = ''
+            # DataFrame de repetidos (vazio por padrão para este fluxo)
+            df_repeated = pd.DataFrame(columns=expected_columns)
 
-        # Estatísticas gerais
-        total_records = len(df_reduzido)
-        
-        # Máscara de dados ruins (telefone vazio ou com tamanho inválido)
-        is_phone_empty = df_reduzido['telefone_ajustado'] == ''
-        # Considera ruim se tiver menos de 13 caracteres (ex: +551199999999 tem 14 caracteres)
-        is_phone_length_wrong = (~is_phone_empty) & (df_reduzido['telefone_ajustado'].str.len() < 13)
-        
-        bad_data_mask = is_phone_empty | is_phone_length_wrong
-        
-        df_bad = df_reduzido[bad_data_mask]
-        df_good = df_reduzido[~bad_data_mask]
+            # Garantir a ordem das colunas para a interface
+            available_cols =[c for c in expected_columns if c in df_good.columns]
+            
+            df_good_final = df_good[available_cols]
+            df_bad_final = df_bad[available_cols] if not df_bad.empty else pd.DataFrame(columns=available_cols)
+            df_repeated_final = df_repeated[available_cols] if not df_repeated.empty else pd.DataFrame(columns=available_cols)
 
-        # =====================================================================
-        # ADIÇÃO DOS REGISTROS ESTÁTICOS PARA TESTE
-        # =====================================================================
-        static_data =[
-            {'telefone': '(11) 95904-4561', 'telefone_ajustado': '+5511959044561', 'terapia': 'Acupuntura', 'nome_do_paciente': 'BRANDON AGUIAR'},
-            {'telefone': '(11) 97140-2433', 'telefone_ajustado': '+5511971402433', 'terapia': 'Fisioterapia', 'nome_do_paciente': 'KARINE COFRAT'}
-        ]
-        df_static = pd.DataFrame(static_data)
-        
-        # Preenche as colunas faltantes no df_static com vazio para evitar NaN
-        for col in expected_columns:
-            if col not in df_static.columns:
-                df_static[col] = ''
-                
-        # Concatena os dados estáticos no topo dos dados bons
-        df_good = pd.concat([df_static, df_good], ignore_index=True)
-        # =====================================================================
-
-        stats = {
-            'total': total_records,
-            'unique': len(df_good['telefone_ajustado'].unique()) if not df_good.empty else 0,
-            'repeated': 0, # Não há validação de repetidos por nome neste layout
-            'bad_total': bad_data_mask.sum(),
-            'bad_empty': is_phone_empty.sum(),
-            'bad_length': is_phone_length_wrong.sum()
-        }
-
-        # DataFrame de repetidos (vazio por padrão para este fluxo)
-        df_repeated = pd.DataFrame(columns=expected_columns)
-
-        # Garantir a ordem das colunas para a interface
-        available_cols =[c for c in expected_columns if c in df_good.columns]
-        
-        df_good_final = df_good[available_cols]
-        df_bad_final = df_bad[available_cols] if not df_bad.empty else pd.DataFrame(columns=available_cols)
-        df_repeated_final = df_repeated[available_cols] if not df_repeated.empty else pd.DataFrame(columns=available_cols)
-
-        return df_good_final, df_bad_final, df_repeated_final, stats
+            return df_good_final, df_bad_final, df_repeated_final, stats
 
     # --- Interface do Streamlit ---
 
