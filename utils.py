@@ -350,19 +350,19 @@ def confirmation_page():
             else:
                 return therapy_name.title()
 
-        # NOVA FUNÇÃO: Extrair e formatar apenas o primeiro nome
-        def format_first_name(full_name):
+        # NOVA FUNÇÃO: Extrair e formatar o nome completo (capitalizado)
+        def format_full_name(full_name):
             if pd.isna(full_name) or str(full_name).strip() == '':
                 return ''
-            # Divide o nome por espaços, pega a primeira palavra e capitaliza (ex: 'MARIA JOSE' -> 'Maria')
-            first_name = str(full_name).strip().split()[0]
-            return first_name.capitalize()
+            # Remove espaços extras, transforma em minúsculo e capitaliza cada parte
+            name_parts = str(full_name).strip().split()
+            return ' '.join([part.capitalize() for part in name_parts])
 
         # Aplica as transformações criando as colunas que o sistema espera
         df_reduzido['telefone'] = df_reduzido['TELEFONE']
         df_reduzido['telefone_ajustado'] = df_reduzido['TELEFONE'].apply(format_phone_number)
         df_reduzido['terapia'] = df_reduzido['TERAPIA '].apply(standardize_therapy_name)
-        df_reduzido['nome_do_paciente'] = df_reduzido[name_col].apply(format_first_name)
+        df_reduzido['nome_do_paciente'] = df_reduzido[name_col].apply(format_full_name)
 
         # =====================================================================
         # FIM DA TRANSFORMAÇÃO MANUAL
