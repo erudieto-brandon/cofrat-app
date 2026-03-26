@@ -131,7 +131,7 @@ def confirmation_page():
 
         # --- LÓGICA DE EXTRAÇÃO BASEADA NO TIPO DE ARQUIVO ---
         
-        if file_type == "Consultas":
+        if file_type in ["Confirmação de Consultas", "Cancelamento de Consultas"]:
             # Lógica Original para Consultas
             current_date = None
             current_specialty = None
@@ -153,7 +153,7 @@ def confirmation_page():
                         processed_rows.append([current_date, current_specialty] + data_fields[:7])
                     except StopIteration: continue
 
-        elif file_type in ["Acupuntura", "RPG"]:
+        elif file_type in ["Confirmação de Acupuntura", "Confirmação de RPG", "Cancelamento de Acupuntura"]:
             # Nova Lógica para Acupuntura e RPG (Layout de Serviços)
             current_date = None
             current_specialty = None
@@ -452,9 +452,9 @@ def confirmation_page():
     # --- Dropdown atualizado com a nova opção ---
     file_type_option = st.selectbox(
         "Selecione o tipo de arquivo:",
-        options=["Consultas", "Acupuntura", "RPG", "Autorização liberada"],
+        options=["Confirmação de Consultas", "Confirmação de Acupuntura", "Confirmação de RPG", "Autorização liberada", "Cancelamento de Acupuntura", "Cancelamento de Consultas"],
         index=0,
-        help="Escolha 'Consultas' para o layout padrão, 'Acupuntura'/'RPG' para o layout de serviços, ou 'Autorização liberada' para arquivos Excel."
+        help="Escolha o tipo de arquivo correspondente ao disparo desejado."
     )
     # -------------------------------------------------------
 
