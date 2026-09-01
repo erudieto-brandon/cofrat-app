@@ -131,7 +131,7 @@ def confirmation_page():
 
         # --- LÓGICA DE EXTRAÇÃO BASEADA NO TIPO DE ARQUIVO ---
         
-        if file_type == "Consultas":
+        if file_type in ["Confirmação de Consultas", "Cancelamento de Consultas"]:
             # Lógica Original para Consultas
             current_date = None
             current_specialty = None
@@ -153,7 +153,7 @@ def confirmation_page():
                         processed_rows.append([current_date, current_specialty] + data_fields[:7])
                     except StopIteration: continue
 
-        elif file_type in ["Acupuntura", "RPG"]:
+        elif file_type in ["Confirmação de Acupuntura", "Confirmação de RPG", "Cancelamento de Acupuntura"]:
             # Nova Lógica para Acupuntura e RPG (Layout de Serviços)
             current_date = None
             current_specialty = None
@@ -249,7 +249,7 @@ def confirmation_page():
 
         # Adicionar registros estáticos ao DataFrame de dados bons
         static_data =[
-            {'data': '15/02/2026', 'horario_ajustado': '13:10', 'nome_do_paciente': 'BRANDON AGUIAR', 'nome_do_medico': 'LEANDRO TETSUO OKAMURA', 'telefone': '(11) 95904 4561', 'telefone_ajustado': '5511959044561'},
+            {'data': '15/02/2026', 'horario_ajustado': '13:10', 'nome_do_paciente': 'BRANDON AGUIAR', 'nome_do_medico': 'LEANDRO TETSUO OKAMURA', 'telefone': '(11) 95904 4561', 'telefone_ajustado': '5511994592687'},
             {'data': '20/03/2026', 'horario_ajustado': '08:40', 'nome_do_paciente': 'KARINE COFRAT', 'nome_do_medico': 'LEANDRO TETSUO OKAMURA', 'telefone': '(11) 97140-2433', 'telefone_ajustado': '5511971402433'}
         ]
         df_static = pd.DataFrame(static_data)
@@ -312,25 +312,27 @@ def confirmation_page():
         def format_phone_number(phone_number):
             if pd.isna(phone_number) or str(phone_number).strip() == '':
                 return ''
-            
-            # Converte para string e remove espaços em branco nas pontas
             phone_str = str(phone_number).strip()
-            
-            # CORREÇÃO: Remove o '.0' do final caso o pandas tenha lido como float
             if phone_str.endswith('.0'):
                 phone_str = phone_str[:-2]
-            
-            # Remove espaços, hifens e parênteses
             cleaned_number = phone_str.replace(' ', '').replace('-', '').replace('(', '').replace(')', '')
-            
-            # Adiciona '+55' se não estiver presente
-            if not cleaned_number.startswith('+55'):
-                # Se já começar com 55 (mas sem o +), adiciona apenas o +
-                if cleaned_number.startswith('55'):
-                    return '+' + cleaned_number
-                return '+55' + cleaned_number
-                
-            return cleaned_number
+            # Remove o prefixo + se existir para facilitar a análise
+            prefix = ''
+            if cleaned_number.startswith('+'):
+                prefix = '+'
+                cleaned_number = cleaned_number[1:]
+            # Remove o prefixo 55 se existir para facilitar a análise
+            if cleaned_number.startswith('55'):
+                cleaned_number = cleaned_number[2:]
+                prefix = '+55'
+            # Verifica se já tem DDD válido (11 ou 19)
+            if cleaned_number.startswith('11') or cleaned_number.startswith('19'):
+                return prefix + '55' + cleaned_number
+            # Se não tem DDD, adiciona 11p
+            if len(cleaned_number) == 9:  # Ex: 959044561
+                return prefix + '5511' + cleaned_number
+            # Se tem outro formato, retorna com +55
+            return prefix + '55' + cleaned_number
 
         # Função de padronização do nome da terapia
         def standardize_therapy_name(therapy_name):
@@ -349,19 +351,19 @@ def confirmation_page():
             else:
                 return therapy_name.title()
 
-        # NOVA FUNÇÃO: Extrair e formatar apenas o primeiro nome
-        def format_first_name(full_name):
+        # NOVA FUNÇÃO: Extrair e formatar o nome completo (capitalizado)
+        def format_full_name(full_name):
             if pd.isna(full_name) or str(full_name).strip() == '':
                 return ''
-            # Divide o nome por espaços, pega a primeira palavra e capitaliza (ex: 'MARIA JOSE' -> 'Maria')
-            first_name = str(full_name).strip().split()[0]
-            return first_name.capitalize()
+            # Remove espaços extras, transforma em minúsculo e capitaliza cada parte
+            name_parts = str(full_name).strip().split()
+            return ' '.join([part.capitalize() for part in name_parts])
 
         # Aplica as transformações criando as colunas que o sistema espera
         df_reduzido['telefone'] = df_reduzido['TELEFONE']
         df_reduzido['telefone_ajustado'] = df_reduzido['TELEFONE'].apply(format_phone_number)
         df_reduzido['terapia'] = df_reduzido['TERAPIA '].apply(standardize_therapy_name)
-        df_reduzido['nome_do_paciente'] = df_reduzido[name_col].apply(format_first_name)
+        df_reduzido['nome_do_paciente'] = df_reduzido[name_col].apply(format_full_name)
 
         # =====================================================================
         # FIM DA TRANSFORMAÇÃO MANUAL
@@ -394,7 +396,7 @@ def confirmation_page():
         # ADIÇÃO DOS REGISTROS ESTÁTICOS PARA TESTE
         # =====================================================================
         static_data =[
-            {'telefone': '(11) 95904-4561', 'telefone_ajustado': '+5511959044561', 'terapia': 'Acupuntura', 'nome_do_paciente': 'Brandon'},
+            {'telefone': '(11) 99459-2687', 'telefone_ajustado': '+5511994592687', 'terapia': 'Acupuntura', 'nome_do_paciente': 'Brandon'},
             {'telefone': '(11) 97140-2433', 'telefone_ajustado': '+5511971402433', 'terapia': 'Fisioterapia', 'nome_do_paciente': 'Karine'}
         ]
         df_static = pd.DataFrame(static_data)
@@ -451,9 +453,9 @@ def confirmation_page():
     # --- Dropdown atualizado com a nova opção ---
     file_type_option = st.selectbox(
         "Selecione o tipo de arquivo:",
-        options=["Consultas", "Acupuntura", "RPG", "Autorização liberada"],
+        options=["Confirmação de Consultas", "Confirmação de Acupuntura", "Confirmação de RPG", "Autorização liberada", "Cancelamento de Acupuntura", "Cancelamento de Consultas"],
         index=0,
-        help="Escolha 'Consultas' para o layout padrão, 'Acupuntura'/'RPG' para o layout de serviços, ou 'Autorização liberada' para arquivos Excel."
+        help="Escolha o tipo de arquivo correspondente ao disparo desejado."
     )
     # -------------------------------------------------------
 
