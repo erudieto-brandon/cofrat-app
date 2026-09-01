@@ -248,7 +248,7 @@ def confirmation_page():
 
         # Adicionar registros estáticos ao DataFrame de dados bons
         static_data =[
-            {'data': '15/02/2026', 'horario_ajustado': '13:10', 'nome_do_paciente': 'BRANDON AGUIAR', 'nome_do_medico': 'LEANDRO TETSUO OKAMURA', 'telefone': '(11) 95904 4561', 'telefone_ajustado': '5511959044561'},
+            {'data': '15/02/2026', 'horario_ajustado': '13:10', 'nome_do_paciente': 'BRANDON AGUIAR', 'nome_do_medico': 'LEANDRO TETSUO OKAMURA', 'telefone': '(11) 95904 4561', 'telefone_ajustado': '5511994592687'},
             {'data': '20/03/2026', 'horario_ajustado': '08:40', 'nome_do_paciente': 'KARINE COFRAT', 'nome_do_medico': 'LEANDRO TETSUO OKAMURA', 'telefone': '(11) 97140-2433', 'telefone_ajustado': '5511971402433'}
         ]
         df_static = pd.DataFrame(static_data)
@@ -395,7 +395,7 @@ def confirmation_page():
         # ADIÇÃO DOS REGISTROS ESTÁTICOS PARA TESTE
         # =====================================================================
         static_data =[
-            {'telefone': '(11) 95904-4561', 'telefone_ajustado': '+5511959044561', 'terapia': 'Acupuntura', 'nome_do_paciente': 'Brandon'},
+            {'telefone': '(11) 99459-2687', 'telefone_ajustado': '+5511994592687', 'terapia': 'Acupuntura', 'nome_do_paciente': 'Brandon'},
             {'telefone': '(11) 97140-2433', 'telefone_ajustado': '+5511971402433', 'terapia': 'Fisioterapia', 'nome_do_paciente': 'Karine'}
         ]
         df_static = pd.DataFrame(static_data)
