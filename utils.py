@@ -243,6 +243,7 @@ def confirmation_page():
             'bad_length': is_phone_length_wrong.sum()
         }
 
+
         df_bad = df[bad_data_mask]
         df_good = df[~bad_data_mask]
 
